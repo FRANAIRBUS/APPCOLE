@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -9,39 +10,42 @@ class AuthService {
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
-  Future<UserCredential> signInWithEmail(String email, String password) {
-    return _auth.signInWithEmailAndPassword(email: email, password: password);
+  Future<void> signInWithEmail({required String email, required String password}) async {
+    await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
   }
 
-  Future<UserCredential> signUpWithEmail(String email, String password) {
-    return _auth.createUserWithEmailAndPassword(email: email, password: password);
+  Future<void> signUpWithEmail({required String email, required String password}) async {
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+    await credential.user?.sendEmailVerification();
   }
 
-  Future<UserCredential> signInWithGoogle() async {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) {
-      throw FirebaseAuthException(code: 'aborted-by-user');
+  Future<void> signInWithGoogle() async {
+    if (kIsWeb) {
+      await _auth.signInWithPopup(GoogleAuthProvider());
+      return;
     }
-
-    final auth = await googleUser.authentication;
+    final account = await GoogleSignIn().signIn();
+    if (account == null) return;
+    final auth = await account.authentication;
     final credential = GoogleAuthProvider.credential(
       accessToken: auth.accessToken,
       idToken: auth.idToken,
     );
-    return _auth.signInWithCredential(credential);
+    await _auth.signInWithCredential(credential);
   }
 
-  Future<UserCredential> signInWithApple() async {
+  Future<void> signInWithApple() async {
     final appleCredential = await SignInWithApple.getAppleIDCredential(
       scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
     );
-
-    final credential = OAuthProvider('apple.com').credential(
+    final oAuthCredential = OAuthProvider('apple.com').credential(
       idToken: appleCredential.identityToken,
       accessToken: appleCredential.authorizationCode,
     );
-
-    return _auth.signInWithCredential(credential);
+    await _auth.signInWithCredential(oAuthCredential);
   }
 
   Future<void> signOut() => _auth.signOut();

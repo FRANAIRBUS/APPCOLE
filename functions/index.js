@@ -2,98 +2,103 @@ const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
+const {getStorage} = require('firebase-admin/storage');
 
 initializeApp();
 const db = getFirestore();
 
-exports.redeemInviteCode = onCall(async (request) => {
+function assertAuth(request) {
   const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
+  return uid;
+}
+
+exports.redeemInviteCode = onCall(async (request) => {
+  const uid = assertAuth(request);
   const code = String(request.data?.code || '').trim().toUpperCase();
+  const childName = String(request.data?.childName || '').trim();
+  const childAge = Number(request.data?.childAge || 0);
+  const requestedClassId = String(request.data?.classId || '').trim();
 
-  if (!uid) throw new HttpsError('unauthenticated', 'Auth required');
-  if (!code) throw new HttpsError('invalid-argument', 'Code required');
+  if (!code || !childName || !Number.isFinite(childAge) || childAge <= 0) {
+    throw new HttpsError('invalid-argument', 'code, childName and childAge are required');
+  }
 
-  const snap = await db.collectionGroup('inviteCodes').where('__name__', '==', code).limit(1).get();
-  if (snap.empty) throw new HttpsError('not-found', 'Invalid invite code');
+  const inviteQuery = await db.collectionGroup('inviteCodes').where('__name__', '==', code).limit(1).get();
+  if (inviteQuery.empty) throw new HttpsError('not-found', 'Invite code not found');
 
-  const inviteRef = snap.docs[0].ref;
+  const inviteRef = inviteQuery.docs[0].ref;
   const schoolRef = inviteRef.parent.parent;
   if (!schoolRef) throw new HttpsError('internal', 'Invalid invite path');
 
-  const schoolId = schoolRef.id;
+  let schoolId = schoolRef.id;
 
   await db.runTransaction(async (tx) => {
-    const inviteDoc = await tx.get(inviteRef);
-    const data = inviteDoc.data();
-    if (!data) throw new HttpsError('not-found', 'Invite not found');
+    const inviteSnap = await tx.get(inviteRef);
+    const invite = inviteSnap.data();
+    if (!invite) throw new HttpsError('not-found', 'Invite code not found');
 
-    const uses = Number(data.uses || 0);
-    const maxUses = Number(data.maxUses || 0);
-    const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : null;
-
+    const uses = Number(invite.uses || 0);
+    const maxUses = Number(invite.maxUses || 0);
+    const expiresAt = invite.expiresAt?.toDate?.();
     if (maxUses > 0 && uses >= maxUses) throw new HttpsError('failed-precondition', 'Invite exhausted');
     if (expiresAt && expiresAt.getTime() < Date.now()) throw new HttpsError('failed-precondition', 'Invite expired');
 
+    const classId = requestedClassId || String(invite.classId || '');
     tx.update(inviteRef, {uses: FieldValue.increment(1)});
 
-    const userRef = schoolRef.collection('users').doc(uid);
     tx.set(
-      userRef,
+      schoolRef.collection('users').doc(uid),
       {
-        classIds: data.classId ? [String(data.classId)] : [],
+        displayName: request.auth.token.name || request.auth.token.email || 'Familia',
+        role: 'parent',
+        children: [{name: childName, age: childAge, classId}],
+        classIds: classId ? [classId] : [],
         createdAt: FieldValue.serverTimestamp(),
+        lastActiveAt: FieldValue.serverTimestamp(),
       },
       {merge: true},
     );
   });
 
-  return {schoolId};
-});
-
-exports.getOrCreateChat = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  const schoolId = String(request.data?.schoolId || '').trim();
-  const peerUid = String(request.data?.peerUid || '').trim();
-
-  if (!uid) throw new HttpsError('unauthenticated', 'Auth required');
-  if (!schoolId || !peerUid || uid === peerUid) throw new HttpsError('invalid-argument', 'Invalid participants');
-
-  const sorted = [uid, peerUid].sort();
-  const chatId = `${sorted[0]}_${sorted[1]}`;
-  const chatRef = db.doc(`schools/${schoolId}/chats/${chatId}`);
-
-  await chatRef.set(
-    {
-      participants: sorted,
-      lastMessage: null,
-      lastMessageAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    {merge: true},
-  );
-
-  return {chatId};
+  return {ok: true, schoolId};
 });
 
 exports.deleteMyAccount = onCall(async (request) => {
-  const uid = request.auth?.uid;
+  const uid = assertAuth(request);
   const schoolId = String(request.data?.schoolId || '').trim();
+  if (!schoolId) throw new HttpsError('invalid-argument', 'schoolId is required');
 
-  if (!uid) throw new HttpsError('unauthenticated', 'Auth required');
-  if (!schoolId) throw new HttpsError('invalid-argument', 'schoolId required');
-
-  const userRef = db.doc(`schools/${schoolId}/users/${uid}`);
-  await userRef.delete();
-
-  const chats = await db.collection(`schools/${schoolId}/chats`).where('participants', 'array-contains', uid).get();
+  const posts = await db.collection(`schools/${schoolId}/posts`).where('authorUid', '==', uid).get();
+  const events = await db.collection(`schools/${schoolId}/events`).where('organizerUid', '==', uid).get();
+  const attendees = await db.collectionGroup('attendees').where('__name__', '==', uid).get();
 
   const batch = db.batch();
-  for (const doc of chats.docs) {
-    batch.delete(doc.ref);
-  }
+  posts.docs.forEach((doc) => batch.update(doc.ref, {status: 'deleted'}));
+  events.docs.forEach((doc) => batch.update(doc.ref, {status: 'deleted'}));
+  attendees.docs
+    .filter((doc) => doc.ref.path.startsWith(`schools/${schoolId}/events/`))
+    .forEach((doc) => batch.delete(doc.ref));
+  batch.delete(db.doc(`schools/${schoolId}/users/${uid}`));
   await batch.commit();
 
+  await getStorage().bucket().file(`schools/${schoolId}/users/${uid}/profile.jpg`).delete({ignoreNotFound: true});
   await getAuth().deleteUser(uid);
 
-  return {deleted: true};
+  return {ok: true};
+});
+
+exports.moderationHideTarget = onCall(async (request) => {
+  const uid = assertAuth(request);
+  const targetPath = String(request.data?.targetPath || '').trim();
+  if (!targetPath.startsWith('schools/')) throw new HttpsError('invalid-argument', 'Invalid targetPath');
+
+  const segments = targetPath.split('/');
+  const schoolId = segments[1];
+  const userSnap = await db.doc(`schools/${schoolId}/users/${uid}`).get();
+  const role = userSnap.data()?.role;
+  if (!(role === 'moderator' || role === 'admin')) throw new HttpsError('permission-denied', 'Insufficient role');
+
+  await db.doc(targetPath).set({status: 'hidden', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  return {ok: true};
 });
