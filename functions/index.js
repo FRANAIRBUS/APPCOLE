@@ -1,7 +1,7 @@
 const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
-const {FieldPath, FieldValue, getFirestore} = require('firebase-admin/firestore');
+const {FieldValue, getFirestore} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
 const {getStorage} = require('firebase-admin/storage');
 
@@ -20,24 +20,25 @@ function normalizeRole(role) {
 }
 
 async function resolveSchoolIdForUid(uid) {
-  const snap = await db
-    .collectionGroup('users')
-    .where(FieldPath.documentId(), '==', uid)
-    .limit(10)
-    .get();
+  const schoolsSnap = await db.collection('schools').get();
+  if (schoolsSnap.empty) return null;
 
-  if (snap.empty) return null;
+  const checks = await Promise.all(
+    schoolsSnap.docs.map(async (schoolDoc) => {
+      const userSnap = await schoolDoc.ref.collection('users').doc(uid).get();
+      if (!userSnap.exists) return null;
 
-  const docs = [...snap.docs];
-  docs.sort((a, b) => {
-    const aTs = a.data()?.lastActiveAt;
-    const bTs = b.data()?.lastActiveAt;
-    const aMs = aTs?.toMillis?.() ?? aTs?.toDate?.()?.getTime?.() ?? 0;
-    const bMs = bTs?.toMillis?.() ?? bTs?.toDate?.()?.getTime?.() ?? 0;
-    return bMs - aMs;
-  });
+      const ts = userSnap.data()?.lastActiveAt;
+      const ms = ts?.toMillis?.() ?? ts?.toDate?.()?.getTime?.() ?? 0;
+      return {schoolId: schoolDoc.id, lastActiveMs: ms};
+    }),
+  );
 
-  return docs[0].ref.parent.parent?.id ?? null;
+  const memberships = checks.filter((v) => v !== null);
+  if (!memberships.length) return null;
+
+  memberships.sort((a, b) => b.lastActiveMs - a.lastActiveMs);
+  return memberships[0].schoolId;
 }
 
 function assertSameSchool(providedSchoolId, resolvedSchoolId) {
@@ -79,32 +80,49 @@ exports.redeemInviteCode = onCall(async (request) => {
   const childName = String(request.data?.childName || '').trim();
   const childAge = Number(request.data?.childAge || 0);
   const requestedClassId = String(request.data?.classId || '').trim();
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
 
   if (!code || !childName || !Number.isFinite(childAge) || childAge <= 0) {
     throw new HttpsError('invalid-argument', 'code, childName and childAge are required');
   }
 
-  const inviteQuery = await db
-    .collectionGroup('inviteCodes')
-    .where(FieldPath.documentId(), '==', code)
-    .limit(1)
-    .get();
+  let inviteRef = null;
 
-  if (inviteQuery.empty) throw new HttpsError('not-found', 'Invite code not found');
+  if (providedSchoolId) {
+    const directRef = db.doc(`schools/${providedSchoolId}/inviteCodes/${code}`);
+    const directSnap = await directRef.get();
+    if (directSnap.exists) {
+      inviteRef = directRef;
+    }
+  }
 
-  const inviteRef = inviteQuery.docs[0].ref;
+  const schoolsSnap = await db.collection('schools').get();
+  if (!inviteRef) {
+    for (const schoolDoc of schoolsSnap.docs) {
+      const candidateRef = schoolDoc.ref.collection('inviteCodes').doc(code);
+      const candidateSnap = await candidateRef.get();
+      if (candidateSnap.exists) {
+        inviteRef = candidateRef;
+        break;
+      }
+    }
+  }
+
+  if (!inviteRef) throw new HttpsError('not-found', 'Invite code not found');
+
   const schoolRef = inviteRef.parent.parent;
   if (!schoolRef) throw new HttpsError('internal', 'Invalid invite path');
   const schoolId = schoolRef.id;
 
   // Bloqueo multi-colegio (una cuenta = un colegio). Si ya existe en otro colegio, rechazamos.
-  const membershipsSnap = await db
-    .collectionGroup('users')
-    .where(FieldPath.documentId(), '==', uid)
-    .limit(10)
-    .get();
+  const memberships = await Promise.all(
+    schoolsSnap.docs.map(async (schoolDoc) => {
+      const userSnap = await schoolDoc.ref.collection('users').doc(uid).get();
+      return userSnap.exists ? schoolDoc.id : null;
+    }),
+  );
 
-  const foreignMembership = membershipsSnap.docs.find((doc) => doc.ref.parent.parent?.id !== schoolId);
+  const foreignMembership = memberships.find((m) => m && m !== schoolId);
   if (foreignMembership) {
     throw new HttpsError(
       'failed-precondition',
@@ -306,15 +324,19 @@ exports.deleteMyAccount = onCall(async (request) => {
 
   const posts = await db.collection(`schools/${schoolId}/posts`).where('authorUid', '==', uid).get();
   const events = await db.collection(`schools/${schoolId}/events`).where('organizerUid', '==', uid).get();
-  const attendees = await db.collectionGroup('attendees').where(FieldPath.documentId(), '==', uid).get();
+  const eventsForAttendees = await db.collection(`schools/${schoolId}/events`).get();
   const chats = await db.collection(`schools/${schoolId}/chats`).where('participants', 'array-contains', uid).get();
 
   const ops = [];
   posts.docs.forEach((doc) => ops.push({type: 'update', ref: doc.ref, data: {status: 'deleted', updatedAt: FieldValue.serverTimestamp()}}));
   events.docs.forEach((doc) => ops.push({type: 'update', ref: doc.ref, data: {status: 'deleted', updatedAt: FieldValue.serverTimestamp()}}));
-  attendees.docs
-    .filter((doc) => doc.ref.path.startsWith(`schools/${schoolId}/events/`))
-    .forEach((doc) => ops.push({type: 'delete', ref: doc.ref}));
+  for (const eventDoc of eventsForAttendees.docs) {
+    const attendeeRef = eventDoc.ref.collection('attendees').doc(uid);
+    const attendeeSnap = await attendeeRef.get();
+    if (attendeeSnap.exists) {
+      ops.push({type: 'delete', ref: attendeeRef});
+    }
+  }
 
   // Mensajes del usuario: anonimizamos (status=deleted, text='') para que el otro participante no vea contenido.
   for (const chatDoc of chats.docs) {

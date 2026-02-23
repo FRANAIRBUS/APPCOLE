@@ -57,3 +57,5 @@ service-account.json
 
 coverage/
 firebase-debug.log
+node_modules/
+functions/node_modules/
