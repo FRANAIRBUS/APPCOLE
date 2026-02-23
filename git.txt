@@ -5,3 +5,5 @@ git push origin main
 
 
 flutter run -d web-server --web-port 8081 --web-hostname 0.0.0.0
+
+flutter run -d chrome --web-port 8081
