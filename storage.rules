@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+
+    function inSchool(schoolId) {
+      return signedIn()
+        && firestore.exists(/databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid));
+    }
+
+    // Foto de adulto (opcional). Restringido a 1 fichero con nombre fijo.
+    // Importante: no permitir uploads arbitrarios fuera de esta ruta.
+    match /schools/{schoolId}/users/{uid}/profile.jpg {
+      allow read: if inSchool(schoolId);
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && inSchool(schoolId)
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

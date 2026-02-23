@@ -7,6 +7,7 @@ import '../features/auth/session_provider.dart';
 import '../features/biblio/biblio_screen.dart';
 import '../features/bienvenida/bienvenida_screen.dart';
 import '../features/chat/chat_screen.dart';
+import '../features/chat/chat_thread_screen.dart';
 import '../features/events/events_screen.dart';
 import '../features/home/app_shell.dart';
 import '../features/matching/matching_screen.dart';
@@ -49,6 +50,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (_, __) => const _RouterSplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/invite', builder: (_, __) => const InviteScreen()),
+      GoRoute(
+        path: '/chat/:chatId',
+        builder: (context, state) => ChatThreadScreen(chatId: state.pathParameters['chatId']!),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
         branches: [

@@ -2,8 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
+import '../../services/chat_service.dart';
 
 class MatchingScreen extends ConsumerWidget {
   const MatchingScreen({super.key});
@@ -50,13 +52,22 @@ class MatchingScreen extends ConsumerWidget {
                         title: Text(peer.data()['displayName'] ?? 'Familia'),
                         subtitle: Text('Clases en común: ${((peer.data()['classIds'] as List?) ?? []).where(myClassIds.contains).length}'),
                         trailing: OutlinedButton(
-                          onPressed: () => FirebaseFirestore.instance.collection('schools/$schoolId/connections').add({
-                            'fromUid': uid,
-                            'toUid': peer.id,
-                            'status': 'pending',
-                            'createdAt': FieldValue.serverTimestamp(),
-                          }),
-                          child: const Text('Conectar'),
+                          onPressed: () async {
+                            try {
+                              final chatId = await ref.read(chatServiceProvider).getOrCreateChat(
+                                    schoolId: schoolId,
+                                    peerUid: peer.id,
+                                  );
+                              if (!context.mounted) return;
+                              context.go('/chat/$chatId');
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('No se pudo abrir el chat: $e')),
+                              );
+                            }
+                          },
+                          child: const Text('Mensaje'),
                         ),
                       ),
                     ))

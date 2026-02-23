@@ -1,14 +1,15 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatService {
   ChatService(this._functions);
 
   final FirebaseFunctions _functions;
 
-  Future<String> getOrCreateChat({required String schoolId, required String peerUid}) async {
+  Future<String> getOrCreateChat({String? schoolId, required String peerUid}) async {
     final callable = _functions.httpsCallable('getOrCreateChat');
     final response = await callable.call<Map<String, dynamic>>({
-      'schoolId': schoolId,
+      if (schoolId != null && schoolId.trim().isNotEmpty) 'schoolId': schoolId.trim(),
       'peerUid': peerUid,
     });
 
@@ -19,4 +20,15 @@ class ChatService {
 
     return chatId;
   }
+
+  Future<void> sendMessage({String? schoolId, required String chatId, required String text}) async {
+    final callable = _functions.httpsCallable('sendMessage');
+    await callable.call<Map<String, dynamic>>({
+      if (schoolId != null && schoolId.trim().isNotEmpty) 'schoolId': schoolId.trim(),
+      'chatId': chatId,
+      'text': text,
+    });
+  }
 }
+
+final chatServiceProvider = Provider<ChatService>((ref) => ChatService(FirebaseFunctions.instance));

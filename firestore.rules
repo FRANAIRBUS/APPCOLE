@@ -12,6 +12,22 @@ service cloud.firestore {
     function myRole(schoolId) { return get(schoolUserDoc(schoolId)).data.role; }
     function isStaff(schoolId) { return inSchool(schoolId) && (myRole(schoolId) in ['moderator', 'admin']); }
     function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Seguridad: evitar escalada de privilegios vía /users/{uid}.
+    // - El cliente NO puede mutar role/classIds/children ni borrar su doc.
+    // - Solo permite campos de perfil y telemetría mínimos.
+    function userSelfWritableKeys() {
+      return ['displayName', 'photoUrl', 'professional', 'fcmTokens', 'lastActiveAt', 'updatedAt'];
+    }
+    function isSafeSelfUserUpdate() {
+      // Solo permitir cambiar un subconjunto pequeño de claves.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(userSelfWritableKeys())
+        // Inmutables
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.classIds == resource.data.classIds
+        && request.resource.data.children == resource.data.children
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
     function isChatParticipant(schoolId, chatId) {
       return inSchool(schoolId)
         && request.auth.uid in get(/databases/$(database)/documents/schools/$(schoolId)/chats/$(chatId)).data.participants;
@@ -34,8 +50,13 @@ service cloud.firestore {
         // Alta de membresía solo por Cloud Function (Admin SDK)
         allow create: if false;
 
-        allow update: if isOwner(uid) || isStaff(schoolId);
-        allow delete: if isOwner(uid) || isStaff(schoolId);
+        // El usuario solo puede actualizar campos inocuos de su perfil.
+        allow update: if isOwner(uid) && isSafeSelfUserUpdate();
+
+        // Staff puede actualizar usuarios (p.ej. role) desde UI interna o Admin SDK.
+        // Nota: no permitir delete desde cliente; el borrado real va por Function.
+        allow update: if isStaff(schoolId);
+        allow delete: if false;
       }
 
       match /posts/{postId} {
@@ -89,20 +110,15 @@ service cloud.firestore {
 
       match /chats/{chatId} {
         allow read: if inSchool(schoolId) && request.auth.uid in resource.data.participants;
-        allow create: if false;
-        allow delete: if false;
-        allow update: if inSchool(schoolId)
-          && request.auth.uid in resource.data.participants
-          && request.resource.data.participants == resource.data.participants;
+
+        // Crear/enviar/actualizar chats solo por Cloud Functions (anti-spam + integridad lastMessage)
+        allow create, update, delete: if false;
 
         match /messages/{messageId} {
           allow read: if isChatParticipant(schoolId, chatId);
-          allow create: if isChatParticipant(schoolId, chatId)
-            && request.resource.data.senderUid == request.auth.uid
-            && request.resource.data.text is string
-            && request.resource.data.text.size() > 0
-            && request.resource.data.text.size() <= 2000;
-          allow update, delete: if false;
+
+          // Escritura por Function para validar y actualizar lastMessage de forma atómica.
+          allow create, update, delete: if false;
         }
       }
 

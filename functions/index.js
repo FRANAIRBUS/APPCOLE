@@ -2,6 +2,7 @@ const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
 const {FieldPath, FieldValue, getFirestore} = require('firebase-admin/firestore');
+const {getMessaging} = require('firebase-admin/messaging');
 const {getStorage} = require('firebase-admin/storage');
 
 initializeApp();
@@ -11,6 +12,44 @@ function assertAuth(request) {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Authentication required');
   return uid;
+}
+
+function normalizeRole(role) {
+  const r = String(role || '').trim();
+  return r === 'admin' || r === 'moderator' ? r : 'parent';
+}
+
+async function resolveSchoolIdForUid(uid) {
+  const snap = await db
+    .collectionGroup('users')
+    .where(FieldPath.documentId(), '==', uid)
+    .limit(10)
+    .get();
+
+  if (snap.empty) return null;
+
+  const docs = [...snap.docs];
+  docs.sort((a, b) => {
+    const aTs = a.data()?.lastActiveAt;
+    const bTs = b.data()?.lastActiveAt;
+    const aMs = aTs?.toMillis?.() ?? aTs?.toDate?.()?.getTime?.() ?? 0;
+    const bMs = bTs?.toMillis?.() ?? bTs?.toDate?.()?.getTime?.() ?? 0;
+    return bMs - aMs;
+  });
+
+  return docs[0].ref.parent.parent?.id ?? null;
+}
+
+function assertSameSchool(providedSchoolId, resolvedSchoolId) {
+  if (providedSchoolId && resolvedSchoolId && providedSchoolId !== resolvedSchoolId) {
+    throw new HttpsError('failed-precondition', 'School mismatch');
+  }
+}
+
+function chunk(array, size) {
+  const out = [];
+  for (let i = 0; i < array.length; i += size) out.push(array.slice(i, i + size));
+  return out;
 }
 
 function normalizeChildren(rawChildren) {
@@ -116,7 +155,7 @@ exports.redeemInviteCode = onCall(async (request) => {
           request.auth.token.name ||
           request.auth.token.email ||
           'Familia',
-        role: String(existingUser.role || 'parent'),
+        role: normalizeRole(existingUser.role),
         children: mergedChildren,
         classIds: mergedClassIds,
         photoUrl: existingUser.photoUrl || null,
@@ -135,15 +174,17 @@ exports.redeemInviteCode = onCall(async (request) => {
 
 exports.getOrCreateChat = onCall(async (request) => {
   const uid = assertAuth(request);
-  const schoolId = String(request.data?.schoolId || '').trim();
   const peerUid = String(request.data?.peerUid || '').trim();
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
 
-  if (!schoolId || !peerUid) {
-    throw new HttpsError('invalid-argument', 'schoolId and peerUid are required');
-  }
+  if (!peerUid) throw new HttpsError('invalid-argument', 'peerUid is required');
   if (peerUid === uid) {
     throw new HttpsError('invalid-argument', 'Cannot create a chat with yourself');
   }
+
+  const schoolId = (await resolveSchoolIdForUid(uid)) || providedSchoolId;
+  if (!schoolId) throw new HttpsError('failed-precondition', 'No school membership found');
+  assertSameSchool(providedSchoolId, schoolId);
 
   const meRef = db.doc(`schools/${schoolId}/users/${uid}`);
   const peerRef = db.doc(`schools/${schoolId}/users/${peerUid}`);
@@ -162,6 +203,8 @@ exports.getOrCreateChat = onCall(async (request) => {
     if (!chatSnap.exists) {
       tx.set(chatRef, {
         participants,
+        participantMap: {[participants[0]]: true, [participants[1]]: true},
+        createdByUid: uid,
         createdAt: FieldValue.serverTimestamp(),
         lastMessage: '',
         lastMessageAt: FieldValue.serverTimestamp(),
@@ -169,31 +212,147 @@ exports.getOrCreateChat = onCall(async (request) => {
     }
   });
 
-  return {ok: true, chatId};
+  return {ok: true, chatId, schoolId};
+});
+
+exports.sendMessage = onCall(async (request) => {
+  const uid = assertAuth(request);
+  const chatId = String(request.data?.chatId || '').trim();
+  const text = String(request.data?.text || '').trim();
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
+
+  if (!chatId || !text) throw new HttpsError('invalid-argument', 'chatId and text are required');
+  if (text.length > 2000) throw new HttpsError('invalid-argument', 'Message too long');
+
+  const schoolId = (await resolveSchoolIdForUid(uid)) || providedSchoolId;
+  if (!schoolId) throw new HttpsError('failed-precondition', 'No school membership found');
+  assertSameSchool(providedSchoolId, schoolId);
+
+  const chatRef = db.doc(`schools/${schoolId}/chats/${chatId}`);
+  const chatSnap = await chatRef.get();
+  if (!chatSnap.exists) throw new HttpsError('not-found', 'Chat not found');
+
+  const chat = chatSnap.data() || {};
+  const participants = Array.isArray(chat.participants) ? chat.participants.map(String) : [];
+  if (participants.length !== 2 || !participants.includes(uid)) {
+    throw new HttpsError('permission-denied', 'Not a participant');
+  }
+
+  const peerUid = participants.find((p) => p !== uid);
+  if (!peerUid) throw new HttpsError('internal', 'Invalid chat participants');
+
+  const msgRef = chatRef.collection('messages').doc();
+  await db.runTransaction(async (tx) => {
+    tx.set(msgRef, {
+      senderUid: uid,
+      text,
+      status: 'sent',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    tx.update(chatRef, {
+      lastMessage: text,
+      lastMessageAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  // Push (best-effort). Si falla, el envío del mensaje NO debe fallar.
+  try {
+    const peerSnap = await db.doc(`schools/${schoolId}/users/${peerUid}`).get();
+    const tokens = Array.isArray(peerSnap.data()?.fcmTokens) ? peerSnap.data().fcmTokens : [];
+    if (tokens.length) {
+      const payload = {
+        notification: {
+          title: 'Nuevo mensaje',
+          body: text.length > 120 ? `${text.slice(0, 117)}...` : text,
+        },
+        data: {
+          chatId,
+          schoolId,
+          senderUid: uid,
+        },
+      };
+
+      const res = await getMessaging().sendEachForMulticast({tokens, ...payload});
+      const invalid = [];
+      res.responses.forEach((r, idx) => {
+        if (!r.success) {
+          const code = r.error?.code || '';
+          if (code.includes('registration-token-not-registered') || code.includes('invalid-registration-token')) {
+            invalid.push(tokens[idx]);
+          }
+        }
+      });
+      if (invalid.length) {
+        await db.doc(`schools/${schoolId}/users/${peerUid}`).set(
+          {fcmTokens: FieldValue.arrayRemove(...invalid), updatedAt: FieldValue.serverTimestamp()},
+          {merge: true},
+        );
+      }
+    }
+  } catch (e) {
+    // swallow
+  }
+
+  return {ok: true};
 });
 
 exports.deleteMyAccount = onCall(async (request) => {
   const uid = assertAuth(request);
-  const schoolId = String(request.data?.schoolId || '').trim();
-  if (!schoolId) throw new HttpsError('invalid-argument', 'schoolId is required');
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
+  const schoolId = (await resolveSchoolIdForUid(uid)) || providedSchoolId;
+  if (!schoolId) throw new HttpsError('failed-precondition', 'No school membership found');
+  assertSameSchool(providedSchoolId, schoolId);
 
   const posts = await db.collection(`schools/${schoolId}/posts`).where('authorUid', '==', uid).get();
   const events = await db.collection(`schools/${schoolId}/events`).where('organizerUid', '==', uid).get();
-  const attendees = await db.collectionGroup('attendees').where('__name__', '==', uid).get();
+  const attendees = await db.collectionGroup('attendees').where(FieldPath.documentId(), '==', uid).get();
+  const chats = await db.collection(`schools/${schoolId}/chats`).where('participants', 'array-contains', uid).get();
 
-  const batch = db.batch();
-  posts.docs.forEach((doc) => batch.update(doc.ref, {status: 'deleted'}));
-  events.docs.forEach((doc) => batch.update(doc.ref, {status: 'deleted'}));
+  const ops = [];
+  posts.docs.forEach((doc) => ops.push({type: 'update', ref: doc.ref, data: {status: 'deleted', updatedAt: FieldValue.serverTimestamp()}}));
+  events.docs.forEach((doc) => ops.push({type: 'update', ref: doc.ref, data: {status: 'deleted', updatedAt: FieldValue.serverTimestamp()}}));
   attendees.docs
     .filter((doc) => doc.ref.path.startsWith(`schools/${schoolId}/events/`))
-    .forEach((doc) => batch.delete(doc.ref));
-  batch.delete(db.doc(`schools/${schoolId}/users/${uid}`));
-  await batch.commit();
+    .forEach((doc) => ops.push({type: 'delete', ref: doc.ref}));
+
+  // Mensajes del usuario: anonimizamos (status=deleted, text='') para que el otro participante no vea contenido.
+  for (const chatDoc of chats.docs) {
+    const chatRef = chatDoc.ref;
+    const msgSnap = await chatRef.collection('messages').where('senderUid', '==', uid).limit(500).get();
+    msgSnap.docs.forEach((m) =>
+      ops.push({
+        type: 'update',
+        ref: m.ref,
+        data: {status: 'deleted', text: '', deletedAt: FieldValue.serverTimestamp()},
+      }),
+    );
+
+    // Si el lastMessage pertenece al usuario borrado, lo limpiamos.
+    const lastMsgSnap = await chatRef.collection('messages').orderBy('createdAt', 'desc').limit(1).get();
+    const lastMsg = lastMsgSnap.docs[0]?.data();
+    if (lastMsg && String(lastMsg.senderUid || '') === uid) {
+      ops.push({type: 'update', ref: chatRef, data: {lastMessage: '', updatedAt: FieldValue.serverTimestamp()}});
+    }
+  }
+
+  // Borrar membresía (solo backend) y luego Auth.
+  ops.push({type: 'delete', ref: db.doc(`schools/${schoolId}/users/${uid}`)});
+
+  // Commit en lotes.
+  for (const group of chunk(ops, 400)) {
+    const batch = db.batch();
+    for (const op of group) {
+      if (op.type === 'update') batch.update(op.ref, op.data);
+      else if (op.type === 'delete') batch.delete(op.ref);
+    }
+    await batch.commit();
+  }
 
   await getStorage().bucket().file(`schools/${schoolId}/users/${uid}/profile.jpg`).delete({ignoreNotFound: true});
   await getAuth().deleteUser(uid);
 
-  return {ok: true};
+  return {ok: true, schoolId};
 });
 
 exports.moderationHideTarget = onCall(async (request) => {
