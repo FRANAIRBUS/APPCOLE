@@ -1,14 +1,59 @@
-# Desktop platforms (not used)
-linux/
-macos/
-windows/
+# =========================
+# Flutter / Dart
+# =========================
 
-# Generated / local
 .dart_tool/
+.packages
+.pub/
 build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Si quieres builds reproducibles, puedes versionar pubspec.lock.
+# En apps suele mantenerse. Si decides ignorarlo, descomenta:
+# pubspec.lock
+
+
+# =========================
+# IDEs / Editors
+# =========================
+
 .idea/
 .vscode/
 *.iml
 
-# Firebase local credentials
+
+# =========================
+# OS Files
+# =========================
+
+.DS_Store
+Thumbs.db
+
+
+# =========================
+# Desktop platforms (not used)
+# =========================
+
+linux/
+macos/
+windows/
+
+
+# =========================
+# Firebase / Secrets (NUNCA subir)
+# =========================
+
 service-account.json
+*.pem
+*.key
+*.p12
+
+
+# =========================
+# Misc generated
+# =========================
+
+coverage/
+firebase-debug.log
