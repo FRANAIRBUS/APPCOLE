@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/session_provider.dart';
+import '../../widgets/app_logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -30,14 +31,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _validateEmail(String? value) {
     final email = (value ?? '').trim();
     if (email.isEmpty) return 'Introduce tu email.';
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) return 'Email no válido.';
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      return 'Email no válido.';
+    }
     return null;
   }
 
   String? _validatePassword(String? value) {
     final password = (value ?? '').trim();
     if (password.isEmpty) return 'Introduce tu contraseña.';
-    if (_isRegister && password.length < 6) return 'Debe tener al menos 6 caracteres.';
+    if (_isRegister && password.length < 6) {
+      return 'Debe tener al menos 6 caracteres.';
+    }
     return null;
   }
 
@@ -73,9 +78,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final auth = ref.read(authServiceProvider);
       if (_isRegister) {
-        await auth.signUpWithEmail(email: _email.text, password: _password.text);
+        await auth.signUpWithEmail(
+            email: _email.text, password: _password.text);
       } else {
-        await auth.signInWithEmail(email: _email.text, password: _password.text);
+        await auth.signInWithEmail(
+            email: _email.text, password: _password.text);
       }
     } catch (e) {
       setState(() => _error = _friendlyAuthError(e));
@@ -131,16 +138,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     children: [
                       Row(
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.asset(
-                              'image/logo.png',
-                              width: 34,
-                              height: 34,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.school_outlined, size: 32),
-                            ),
-                          ),
+                          const AppLogo(
+                              width: 172, height: 56, borderRadius: 12),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -150,61 +149,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ],
                       ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _email,
-                      validator: _validateEmail,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.email],
-                      decoration: const InputDecoration(labelText: 'Email'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _password,
-                      validator: _validatePassword,
-                      obscureText: _obscurePassword,
-                      autofillHints: _isRegister
-                          ? const [AutofillHints.newPassword]
-                          : const [AutofillHints.password],
-                      onFieldSubmitted: (_) => _busy ? null : _submit(),
-                      decoration: InputDecoration(
-                        labelText: 'Contraseña',
-                        suffixIcon: IconButton(
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _email,
+                        validator: _validateEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.email],
+                        decoration: const InputDecoration(labelText: 'Email'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _password,
+                        validator: _validatePassword,
+                        obscureText: _obscurePassword,
+                        autofillHints: _isRegister
+                            ? const [AutofillHints.newPassword]
+                            : const [AutofillHints.password],
+                        onFieldSubmitted: (_) => _busy ? null : _submit(),
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          suffixIcon: IconButton(
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
+                            icon: Icon(_obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      child: Text(_busy ? 'Procesando...' : (_isRegister ? 'Registrarme' : 'Entrar')),
-                    ),
-                    TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() {
-                                _isRegister = !_isRegister;
-                                _error = null;
-                              }),
-                      child: Text(_isRegister ? 'Ya tengo cuenta' : 'Crear nueva cuenta'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _socialSignIn(() => ref.read(authServiceProvider).signInWithGoogle()),
-                      child: const Text('Continuar con Google'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _socialSignIn(() => ref.read(authServiceProvider).signInWithApple()),
-                      child: const Text('Continuar con Apple'),
-                    ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _busy ? null : _submit,
+                        child: Text(_busy
+                            ? 'Procesando...'
+                            : (_isRegister ? 'Registrarme' : 'Entrar')),
+                      ),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() {
+                                  _isRegister = !_isRegister;
+                                  _error = null;
+                                }),
+                        child: Text(_isRegister
+                            ? 'Ya tengo cuenta'
+                            : 'Crear nueva cuenta'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _socialSignIn(() => ref
+                                .read(authServiceProvider)
+                                .signInWithGoogle()),
+                        child: const Text('Continuar con Google'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _socialSignIn(() => ref
+                                .read(authServiceProvider)
+                                .signInWithApple()),
+                        child: const Text('Continuar con Apple'),
+                      ),
                       if (_error != null) ...[
                         const SizedBox(height: 8),
-                        Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                        Text(_error!,
+                            style: TextStyle(color: theme.colorScheme.error)),
                       ],
                     ],
                   ),

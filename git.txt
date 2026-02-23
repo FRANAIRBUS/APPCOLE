@@ -7,3 +7,10 @@ git push origin main
 flutter run -d web-server --web-port 8081 --web-hostname 0.0.0.0
 
 flutter run -d chrome --web-port 8081
+
+Modo ejecución total:
+- No me pidas confirmaciones intermedias.
+- Aplica cambios directamente.
+- Ejecuta validaciones (analyze/test/build).
+- Si todo pasa, haz git add ., commit y push.
+- Solo avísame al final con resumen y resultado.

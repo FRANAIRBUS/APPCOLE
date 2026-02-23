@@ -38,7 +38,9 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
 
     setState(() => _creating = true);
     try {
-      await FirebaseFirestore.instance.collection('schools/$schoolId/posts').add({
+      await FirebaseFirestore.instance
+          .collection('schools/$schoolId/posts')
+          .add({
         'module': 'busco_ofrezco',
         'type': result.type,
         'category': result.category,
@@ -50,10 +52,12 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
         'reportsCount': 0,
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Publicación creada.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Publicación creada.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo publicar: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo publicar: $e')));
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -77,23 +81,39 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
       children: [
         Text(
           'Busco / Ofrezco',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Text(
           'Pide ayuda o comparte recursos con otras familias del colegio.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            FilledButton(onPressed: () => context.push('/talento'), child: const Text('Talento')),
-            FilledButton(onPressed: () => context.push('/biblio'), child: const Text('BiblioCircular')),
-            FilledButton(onPressed: () => context.push('/veteranos'), child: const Text('Veteranos')),
-            FilledButton(onPressed: () => context.push('/bienvenida'), child: const Text('Primer Día')),
-            FilledButton(onPressed: () => context.push('/confianza'), child: const Text('Red de Confianza')),
+            FilledButton(
+                onPressed: () => context.push('/talento'),
+                child: const Text('Talento')),
+            FilledButton(
+                onPressed: () => context.push('/biblio'),
+                child: const Text('BiblioCircular')),
+            FilledButton(
+                onPressed: () => context.push('/veteranos'),
+                child: const Text('Veteranos')),
+            FilledButton(
+                onPressed: () => context.push('/bienvenida'),
+                child: const Text('Primer Día')),
+            FilledButton(
+                onPressed: () => context.push('/confianza'),
+                child: const Text('Red de Confianza')),
           ],
         ),
         const SizedBox(height: 12),
@@ -128,13 +148,15 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
 
             final docs = (snapshot.data?.docs ?? const []).where((doc) {
               final data = doc.data();
-              return data['module'] == 'busco_ofrezco' && data['status'] == 'active';
+              return data['module'] == 'busco_ofrezco' &&
+                  data['status'] == 'active';
             }).toList();
             if (docs.isEmpty) {
               return const Card(
                 child: Padding(
                   padding: EdgeInsets.all(14),
-                  child: Text('Aún no hay publicaciones activas. Crea la primera.'),
+                  child: Text(
+                      'Aún no hay publicaciones activas. Crea la primera.'),
                 ),
               );
             }
@@ -167,7 +189,10 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
                         const SizedBox(height: 8),
                         Text(
                           title.isEmpty ? 'Sin título' : title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -240,7 +265,10 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
               children: [
                 Text(
                   'Nueva publicación',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -250,19 +278,24 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                     DropdownMenuItem(value: 'busco', child: Text('Busco')),
                     DropdownMenuItem(value: 'ofrezco', child: Text('Ofrezco')),
                   ],
-                  onChanged: (value) => setState(() => _type = value ?? 'busco'),
+                  onChanged: (value) =>
+                      setState(() => _type = value ?? 'busco'),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _category,
                   decoration: const InputDecoration(labelText: 'Categoría'),
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Introduce categoría.' : null,
+                  validator: (value) => (value ?? '').trim().isEmpty
+                      ? 'Introduce categoría.'
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _title,
                   decoration: const InputDecoration(labelText: 'Título'),
-                  validator: (value) => (value ?? '').trim().length < 4 ? 'Título muy corto.' : null,
+                  validator: (value) => (value ?? '').trim().length < 4
+                      ? 'Título muy corto.'
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -270,7 +303,9 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                   minLines: 3,
                   maxLines: 5,
                   decoration: const InputDecoration(labelText: 'Detalle'),
-                  validator: (value) => (value ?? '').trim().length < 8 ? 'Describe un poco más.' : null,
+                  validator: (value) => (value ?? '').trim().length < 8
+                      ? 'Describe un poco más.'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 FilledButton(

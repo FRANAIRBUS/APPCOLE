@@ -35,7 +35,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
     setState(() => _creating = true);
     try {
-      await FirebaseFirestore.instance.collection('schools/$schoolId/events').add({
+      await FirebaseFirestore.instance
+          .collection('schools/$schoolId/events')
+          .add({
         'title': draft.title,
         'description': draft.description,
         'dateTime': Timestamp.fromDate(draft.dateTime),
@@ -47,10 +49,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         'reportsCount': 0,
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Evento creado.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Evento creado.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo crear el evento: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo crear el evento: $e')));
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -59,7 +63,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   @override
   Widget build(BuildContext context) {
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
-    if (schoolId == null) return const Center(child: CircularProgressIndicator());
+    if (schoolId == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     final stream = FirebaseFirestore.instance
         .collection('schools/$schoolId/events')
@@ -72,12 +78,18 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       children: [
         Text(
           'Entre Padres',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Text(
           'Coordina quedadas, actividades y avisos importantes entre familias.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -128,7 +140,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                 final title = (data['title'] as String?)?.trim();
                 final description = (data['description'] as String?)?.trim();
                 final place = (data['place'] as String?)?.trim();
-                final category = (data['category'] as String?)?.trim() ?? 'general';
+                final category =
+                    (data['category'] as String?)?.trim() ?? 'general';
                 final dateTime = data['dateTime'] as Timestamp?;
 
                 return Card(
@@ -139,14 +152,19 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 4),
-                        Text(description?.isNotEmpty == true ? description! : 'Sin descripción'),
+                        Text(description?.isNotEmpty == true
+                            ? description!
+                            : 'Sin descripción'),
                         const SizedBox(height: 6),
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
                           children: [
                             Chip(label: Text(category)),
-                            Chip(label: Text(place?.isNotEmpty == true ? place! : 'Sin ubicación')),
+                            Chip(
+                                label: Text(place?.isNotEmpty == true
+                                    ? place!
+                                    : 'Sin ubicación')),
                             Chip(label: Text(_prettyDate(dateTime))),
                           ],
                         ),
@@ -219,7 +237,8 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
     if (time == null || !mounted) return;
 
     setState(() {
-      _dateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _dateTime =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
   }
 
@@ -240,13 +259,18 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
               children: [
                 Text(
                   'Nuevo evento',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _title,
                   decoration: const InputDecoration(labelText: 'Título'),
-                  validator: (value) => (value ?? '').trim().length < 4 ? 'Título muy corto.' : null,
+                  validator: (value) => (value ?? '').trim().length < 4
+                      ? 'Título muy corto.'
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -254,25 +278,31 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
                   minLines: 2,
                   maxLines: 4,
                   decoration: const InputDecoration(labelText: 'Descripción'),
-                  validator: (value) => (value ?? '').trim().length < 8 ? 'Describe el evento.' : null,
+                  validator: (value) => (value ?? '').trim().length < 8
+                      ? 'Describe el evento.'
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _place,
                   decoration: const InputDecoration(labelText: 'Lugar'),
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Indica el lugar.' : null,
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty ? 'Indica el lugar.' : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _category,
                   decoration: const InputDecoration(labelText: 'Categoría'),
-                  validator: (value) => (value ?? '').trim().isEmpty ? 'Indica una categoría.' : null,
+                  validator: (value) => (value ?? '').trim().isEmpty
+                      ? 'Indica una categoría.'
+                      : null,
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _pickDateTime,
                   icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text('Fecha: ${_dateTime.day}/${_dateTime.month} ${_dateTime.hour}:${_dateTime.minute.toString().padLeft(2, '0')}'),
+                  label: Text(
+                      'Fecha: ${_dateTime.day}/${_dateTime.month} ${_dateTime.hour}:${_dateTime.minute.toString().padLeft(2, '0')}'),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../widgets/app_logo.dart';
+
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -32,13 +34,7 @@ class AppShell extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'image/logo.png',
-                width: 28,
-                height: 28,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.school_outlined),
-              ),
+              child: const AppLogo(width: 122, height: 40, borderRadius: 8),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -71,11 +67,14 @@ class AppShell extends StatelessWidget {
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) => navigationShell.goBranch(index),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.swap_horiz), label: 'Busco/Ofrezco'),
+          NavigationDestination(
+              icon: Icon(Icons.swap_horiz), label: 'Busco/Ofrezco'),
           NavigationDestination(icon: Icon(Icons.event), label: 'Entre Padres'),
           NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Perfil'),
+          NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline), label: 'Perfil'),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'firebase_options.dart';
 import 'router/app_router.dart';
+import 'widgets/app_logo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +84,14 @@ class ColeConectaApp extends ConsumerWidget {
         ),
         dividerTheme: DividerThemeData(color: base.colorScheme.outlineVariant),
       ),
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            const PersistentLogoOverlay(),
+          ],
+        );
+      },
       routerConfig: router,
     );
   }

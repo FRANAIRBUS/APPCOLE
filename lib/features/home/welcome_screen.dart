@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../widgets/app_logo.dart';
+
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -11,7 +13,9 @@ class WelcomeScreen extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 980;
-            final padding = wide ? const EdgeInsets.symmetric(horizontal: 48, vertical: 28) : const EdgeInsets.all(20);
+            final padding = wide
+                ? const EdgeInsets.symmetric(horizontal: 48, vertical: 28)
+                : const EdgeInsets.all(20);
 
             final content = _WelcomeContent(
               onLogin: () => context.go('/login'),
@@ -58,33 +62,20 @@ class _HeroPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.asset(
-                  'image/logo.png',
-                  width: 32,
-                  height: 32,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.school_outlined, size: 28, color: cs.onPrimaryContainer),
-                ),
-              ),
+              const AppLogo(width: 182, height: 58, borderRadius: 12),
               const SizedBox(width: 10),
               Text(
                 'ColeConecta',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.w800, color: cs.onPrimaryContainer),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800, color: cs.onPrimaryContainer),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             'La red privada de confianza entre familias del mismo colegio.',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(color: cs.onPrimaryContainer.withValues(alpha: 0.95)),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: cs.onPrimaryContainer.withValues(alpha: 0.95)),
           ),
           const SizedBox(height: 18),
           const Wrap(
@@ -92,8 +83,12 @@ class _HeroPanel extends StatelessWidget {
             runSpacing: 10,
             children: [
               _Pill(icon: Icons.lock_outline, label: 'Privada por invitación'),
-              _Pill(icon: Icons.domain_verification_outlined, label: 'Multi-colegio aislado'),
-              _Pill(icon: Icons.no_cell_outlined, label: 'Sin teléfonos visibles'),
+              _Pill(
+                  icon: Icons.domain_verification_outlined,
+                  label: 'Multi-colegio aislado'),
+              _Pill(
+                  icon: Icons.no_cell_outlined,
+                  label: 'Sin teléfonos visibles'),
               _Pill(icon: Icons.chat_bubble_outline, label: 'Chat 1:1 interno'),
             ],
           ),
@@ -102,21 +97,23 @@ class _HeroPanel extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             'Cómo funciona',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700, color: cs.onPrimaryContainer),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700, color: cs.onPrimaryContainer),
           ),
           const SizedBox(height: 10),
           const _StepRow(index: 1, text: 'Inicia sesión o crea tu cuenta.'),
           const SizedBox(height: 8),
-          const _StepRow(index: 2, text: 'Introduce el código de invitación del colegio.'),
+          const _StepRow(
+              index: 2, text: 'Introduce el código de invitación del colegio.'),
           const SizedBox(height: 8),
-          const _StepRow(index: 3, text: 'Accede a tu clase y conecta con otras familias.'),
+          const _StepRow(
+              index: 3,
+              text: 'Accede a tu clase y conecta con otras familias.'),
           const SizedBox(height: 18),
           Text(
             'ColeConecta no es una red social. Es un entorno privado para ayudar, compartir y coordinarte con familias del mismo colegio.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onPrimaryContainer.withValues(alpha: 0.85)),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: cs.onPrimaryContainer.withValues(alpha: 0.85)),
           ),
         ],
       ),
@@ -175,11 +172,15 @@ class _StepRow extends StatelessWidget {
           ),
           child: Text(
             '$index',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, color: cs.primary),
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(fontWeight: FontWeight.w800, color: cs.primary),
           ),
         ),
         const SizedBox(width: 10),
-        Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+        Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
       ],
     );
   }
@@ -200,29 +201,30 @@ class _WelcomeContent extends StatelessWidget {
         if (MediaQuery.of(context).size.width < 980) ...[
           Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  'image/logo.png',
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.school_outlined, color: cs.primary),
-                ),
-              ),
+              const AppLogo(width: 140, height: 44, borderRadius: 10),
               const SizedBox(width: 8),
-              Text('ColeConecta', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+              Text('ColeConecta',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             'Red privada de familias por colegio.',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(
             'Accede por invitación. Sin teléfonos visibles. Sin fotos de menores. Chat interno y módulos útiles para el día a día.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 18),
         ],
@@ -232,17 +234,45 @@ class _WelcomeContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Módulos del MVP', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                Text('Módulos del MVP',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
-                const _ModuleTile(icon: Icons.handshake_outlined, title: 'Busco / Ofrezco', desc: 'Ayuda rápida entre familias.'),
-                const _ModuleTile(icon: Icons.event_outlined, title: 'Entre Padres', desc: 'Eventos y quedadas.'),
-                const _ModuleTile(icon: Icons.groups_outlined, title: 'Mi Clase', desc: 'Matching por clase (classIds).'),
-                const _ModuleTile(icon: Icons.chat_bubble_outline, title: 'Chat interno', desc: 'Conversaciones 1:1 sin exponer teléfonos.'),
+                const _ModuleTile(
+                    icon: Icons.handshake_outlined,
+                    title: 'Busco / Ofrezco',
+                    desc: 'Ayuda rápida entre familias.'),
+                const _ModuleTile(
+                    icon: Icons.event_outlined,
+                    title: 'Entre Padres',
+                    desc: 'Eventos y quedadas.'),
+                const _ModuleTile(
+                    icon: Icons.groups_outlined,
+                    title: 'Mi Clase',
+                    desc: 'Matching por clase (classIds).'),
+                const _ModuleTile(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Chat interno',
+                    desc: 'Conversaciones 1:1 sin exponer teléfonos.'),
                 const Divider(height: 22),
-                const _ModuleTile(icon: Icons.star_border, title: 'Talento del Cole', desc: 'Comparte oficios/habilidades (adultos).'),
-                const _ModuleTile(icon: Icons.menu_book_outlined, title: 'BiblioCircular', desc: 'Libros que rotan: presta/recibe.'),
-                const _ModuleTile(icon: Icons.lightbulb_outline, title: 'Trucos de Veteranos', desc: 'Consejos prácticos y experiencias.'),
-                const _ModuleTile(icon: Icons.flag_outlined, title: 'Primer Día, Cero Dudas', desc: 'Checklist y guía de inicio.'),
+                const _ModuleTile(
+                    icon: Icons.star_border,
+                    title: 'Talento del Cole',
+                    desc: 'Comparte oficios/habilidades (adultos).'),
+                const _ModuleTile(
+                    icon: Icons.menu_book_outlined,
+                    title: 'BiblioCircular',
+                    desc: 'Libros que rotan: presta/recibe.'),
+                const _ModuleTile(
+                    icon: Icons.lightbulb_outline,
+                    title: 'Trucos de Veteranos',
+                    desc: 'Consejos prácticos y experiencias.'),
+                const _ModuleTile(
+                    icon: Icons.flag_outlined,
+                    title: 'Primer Día, Cero Dudas',
+                    desc: 'Checklist y guía de inicio.'),
               ],
             ),
           ),
@@ -255,12 +285,18 @@ class _WelcomeContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Privacidad (no negociable)',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
                 const _Bullet(text: 'Acceso solo por invitación del colegio.'),
-                const _Bullet(text: 'Aislamiento estricto por schoolId (multi-colegio).'),
-                const _Bullet(text: 'No teléfonos visibles, no fotos de menores.'),
-                const _Bullet(text: 'Borrado completo de cuenta (deleteMyAccount).'),
+                const _Bullet(
+                    text: 'Aislamiento estricto por schoolId (multi-colegio).'),
+                const _Bullet(
+                    text: 'No teléfonos visibles, no fotos de menores.'),
+                const _Bullet(
+                    text: 'Borrado completo de cuenta (deleteMyAccount).'),
               ],
             ),
           ),
@@ -275,7 +311,10 @@ class _WelcomeContent extends StatelessWidget {
         Text(
           'Al iniciar sesión podrás introducir el código de invitación del colegio.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -283,7 +322,8 @@ class _WelcomeContent extends StatelessWidget {
 }
 
 class _ModuleTile extends StatelessWidget {
-  const _ModuleTile({required this.icon, required this.title, required this.desc});
+  const _ModuleTile(
+      {required this.icon, required this.title, required this.desc});
 
   final IconData icon;
   final String title;
@@ -312,9 +352,17 @@ class _ModuleTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                Text(title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
-                Text(desc, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text(desc,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
           ),
@@ -339,7 +387,8 @@ class _Bullet extends StatelessWidget {
         children: [
           Icon(Icons.check_circle_outline, size: 18, color: cs.primary),
           const SizedBox(width: 10),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+          Expanded(
+              child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
         ],
       ),
     );
