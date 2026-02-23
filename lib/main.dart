@@ -37,7 +37,7 @@ class ColeConectaApp extends ConsumerWidget {
           elevation: 0,
           scrolledUnderElevation: 0,
           surfaceTintColor: Colors.transparent,
-          backgroundColor: base.colorScheme.surface.withValues(alpha: 0.92),
+          backgroundColor: const Color(0xFF10131A),
           foregroundColor: base.colorScheme.onSurface,
           titleTextStyle:
               base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -104,8 +104,10 @@ class ColeConectaApp extends ConsumerWidget {
         dividerTheme: DividerThemeData(color: base.colorScheme.outlineVariant),
       ),
       builder: (context, child) {
+        final bg = Theme.of(context).scaffoldBackgroundColor;
         return Stack(
           children: [
+            ColoredBox(color: bg),
             if (child != null)
               Padding(
                 padding: const EdgeInsets.only(top: kPersistentLogoClearance),

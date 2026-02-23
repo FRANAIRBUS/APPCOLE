@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-const double kPersistentLogoTopPadding = 6;
-const double kPersistentLogoCardPadding = 6;
-const double kPersistentLogoImageHeight = 56;
+const double kPersistentLogoTopPadding = 0;
+const double kPersistentLogoCardPadding = 8;
+const double kPersistentLogoImageHeight = 64;
 const double kPersistentLogoBottomGap = 12;
 const double kPersistentLogoClearance = kPersistentLogoTopPadding +
     (kPersistentLogoCardPadding * 2) +
@@ -45,6 +45,7 @@ class PersistentLogoOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     return IgnorePointer(
       child: SafeArea(
         child: Align(
@@ -53,14 +54,14 @@ class PersistentLogoOverlay extends StatelessWidget {
             padding: const EdgeInsets.only(top: kPersistentLogoTopPadding),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: cs.surface.withValues(alpha: 0.82),
+                color: bg,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: cs.outlineVariant),
               ),
               child: const Padding(
                 padding: EdgeInsets.all(kPersistentLogoCardPadding),
                 child: AppLogo(
-                  width: 190,
+                  width: 220,
                   height: kPersistentLogoImageHeight,
                   borderRadius: 10,
                 ),
