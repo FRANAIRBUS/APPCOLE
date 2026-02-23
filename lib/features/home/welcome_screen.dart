@@ -195,9 +195,10 @@ class _WelcomeContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         if (MediaQuery.of(context).size.width < 980) ...[
           Row(
             children: [
@@ -301,7 +302,7 @@ class _WelcomeContent extends StatelessWidget {
             ),
           ),
         ),
-        const Spacer(),
+        const SizedBox(height: 24),
         FilledButton.icon(
           onPressed: onLogin,
           icon: const Icon(Icons.login),
@@ -317,6 +318,7 @@ class _WelcomeContent extends StatelessWidget {
               ?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
+      ),
     );
   }
 }
