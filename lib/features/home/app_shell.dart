@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../widgets/app_logo.dart';
-
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -29,22 +27,11 @@ class AppShell extends StatelessWidget {
     final current = navigationShell.currentIndex.clamp(0, _titles.length - 1);
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 8,
-        title: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: const AppLogo(width: 122, height: 40, borderRadius: 8),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _titles[current],
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        titleSpacing: 16,
+        title: Text(
+          _titles[current],
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24),
