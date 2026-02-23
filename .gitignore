@@ -1,22 +1,14 @@
-# Flutter / Dart
-.dart_tool/
-.packages
-build/
-pubspec.lock
+# Desktop platforms (not used)
+linux/
+macos/
+windows/
 
-# IDEs
+# Generated / local
+.dart_tool/
+build/
 .idea/
 .vscode/
 *.iml
 
-# OS
-.DS_Store
-Thumbs.db
-
 # Firebase local credentials
 service-account.json
-
-# Generated
-.flutter-plugins
-.flutter-plugins-dependencies
-.metadata
