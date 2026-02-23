@@ -5,8 +5,6 @@ class BiblioScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('BiblioCircular: intercambio de material escolar (se presta / se vende / se regala).')),
-    );
+    return const Scaffold(body: Center(child: Text('BiblioCircular')));
   }
 }

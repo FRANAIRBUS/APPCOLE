@@ -5,8 +5,6 @@ class VeteranosScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Trucos de los Veteranos: consejos filtrados por curso.')),
-    );
+    return const Scaffold(body: Center(child: Text('Trucos de los Veteranos')));
   }
 }

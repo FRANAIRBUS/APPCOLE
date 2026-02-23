@@ -1,9 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
-import 'module_feed.dart';
 
 class PostsScreen extends ConsumerWidget {
   const PostsScreen({super.key});
@@ -13,172 +14,64 @@ class PostsScreen extends ConsumerWidget {
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
     if (schoolId == null) return const Center(child: CircularProgressIndicator());
 
+    final posts = FirebaseFirestore.instance
+        .collection('schools/$schoolId/posts')
+        .where('module', isEqualTo: 'busco_ofrezco')
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots();
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 22),
+      padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          'Busco / Ofrezco',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Ayuda y colaboración entre familias del mismo colegio. Sin teléfonos. Sin fotos de menores.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 14),
-        _ModuleGrid(
-          onOpen: (route, isTab) => isTab ? context.go(route) : context.push(route),
-        ),
-        const SizedBox(height: 14),
-        Row(
+        const Text('Busco / Ofrezco', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
           children: [
-            Expanded(
-              child: Text(
-                'Últimas publicaciones',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
-            FilledButton.icon(
-              onPressed: () => showPostComposerBottomSheet(
-                context: context,
-                schoolId: schoolId,
-                module: 'busco_ofrezco',
-                defaultType: 'busco',
-                allowedTypes: const ['busco', 'ofrezco'],
-                titleHint: 'Nuevo Busco/Ofrezco',
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('Nuevo'),
-            ),
+            FilledButton(onPressed: () => context.push('/talento'), child: const Text('Talento')),
+            FilledButton(onPressed: () => context.push('/biblio'), child: const Text('BiblioCircular')),
+            FilledButton(onPressed: () => context.push('/veteranos'), child: const Text('Veteranos')),
+            FilledButton(onPressed: () => context.push('/bienvenida'), child: const Text('Primer Día')),
+            FilledButton(onPressed: () => context.push('/confianza'), child: const Text('Red de Confianza')),
           ],
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 520,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Material(
-              color: Theme.of(context).colorScheme.surface,
-              child: ModuleFeed(
-                schoolId: schoolId,
-                module: 'busco_ofrezco',
-                emptyHint: 'Aún no hay publicaciones. Crea la primera.',
-              ),
-            ),
-          ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: () async {
+            await FirebaseFirestore.instance.collection('schools/$schoolId/posts').add({
+              'module': 'busco_ofrezco',
+              'type': 'busco',
+              'category': 'general',
+              'title': 'Necesito ayuda con recogida',
+              'body': '¿Alguien puede recoger hoy?',
+              'authorUid': FirebaseAuth.instance.currentUser!.uid,
+              'createdAt': FieldValue.serverTimestamp(),
+              'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 14))),
+              'status': 'active',
+              'reportsCount': 0,
+            });
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('Crear post de ejemplo'),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: posts,
+          builder: (context, snapshot) {
+            final docs = snapshot.data?.docs ?? const [];
+            return Column(
+              children: docs
+                  .map((d) => Card(
+                        child: ListTile(
+                          title: Text(d.data()['title'] ?? ''),
+                          subtitle: Text(d.data()['body'] ?? ''),
+                        ),
+                      ))
+                  .toList(),
+            );
+          },
         ),
       ],
     );
   }
-}
-
-class _ModuleGrid extends StatelessWidget {
-  const _ModuleGrid({required this.onOpen});
-
-  final void Function(String route, bool isTab) onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <_ModuleItem>[
-      _ModuleItem(
-        title: 'Talento del Cole',
-        subtitle: 'Directorio + anuncios',
-        icon: Icons.work_outline,
-        route: '/talento',
-      ),
-      _ModuleItem(
-        title: 'Entre Padres',
-        subtitle: 'Eventos',
-        icon: Icons.event,
-        route: '/events',
-        isTab: true,
-      ),
-      _ModuleItem(
-        title: 'Mi Clase',
-        subtitle: 'Matching',
-        icon: Icons.groups,
-        route: '/matching',
-        isTab: true,
-      ),
-      _ModuleItem(
-        title: 'BiblioCircular',
-        subtitle: 'Intercambio',
-        icon: Icons.auto_stories_outlined,
-        route: '/biblio',
-      ),
-      _ModuleItem(
-        title: 'Veteranos',
-        subtitle: 'Trucos y consejos',
-        icon: Icons.tips_and_updates_outlined,
-        route: '/veteranos',
-      ),
-      _ModuleItem(
-        title: 'Primer Día',
-        subtitle: 'Cero dudas',
-        icon: Icons.lightbulb_outline,
-        route: '/bienvenida',
-      ),
-      _ModuleItem(
-        title: 'Red de Confianza',
-        subtitle: 'Normas y reporte',
-        icon: Icons.verified_user_outlined,
-        route: '/confianza',
-      ),
-    ];
-
-    final width = MediaQuery.of(context).size.width;
-    final columns = width >= 900 ? 4 : (width >= 600 ? 3 : 2);
-
-    return GridView.count(
-      crossAxisCount: columns,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 1.2,
-      children: items
-          .map(
-            (m) => InkWell(
-              onTap: () => onOpen(m.route, m.isTab),
-              borderRadius: BorderRadius.circular(16),
-              child: Ink(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(m.icon, size: 26),
-                      const Spacer(),
-                      Text(m.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 2),
-                      Text(m.subtitle, style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _ModuleItem {
-  _ModuleItem({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.route,
-    this.isTab = false,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final String route;
-  final bool isTab;
 }

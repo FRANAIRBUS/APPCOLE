@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,49 +43,34 @@ class MatchingScreen extends ConsumerWidget {
               return overlap(b.data()).compareTo(overlap(a.data()));
             });
 
-            Future<void> openChat(String peerUid) async {
-              try {
-                final chatId = await ChatService(FirebaseFunctions.instance).getOrCreateChat(
-                  schoolId: schoolId,
-                  peerUid: peerUid,
-                );
-                if (context.mounted) context.go('/chat/$chatId');
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('No se pudo abrir el chat: $e')),
-                );
-              }
-            }
-
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text('Mi Clase', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                Text(
-                  'Matching por clase. Contacto por chat interno 1:1 (sin teléfonos).',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                ...peers.map(
-                  (peer) {
-                    final data = peer.data();
-                    final peerClasses = (data['classIds'] as List?)?.cast<String>() ?? const [];
-                    final shared = peerClasses.where(myClassIds.contains).length;
-
-                    return Card(
+                const Text('Mi Clase', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                ...peers.map((peer) => Card(
                       child: ListTile(
-                        title: Text(data['displayName'] ?? 'Familia'),
-                        subtitle: Text('Clases en común: $shared'),
-                        trailing: FilledButton(
-                          onPressed: () => openChat(peer.id),
+                        title: Text(peer.data()['displayName'] ?? 'Familia'),
+                        subtitle: Text('Clases en común: ${((peer.data()['classIds'] as List?) ?? []).where(myClassIds.contains).length}'),
+                        trailing: OutlinedButton(
+                          onPressed: () async {
+                            try {
+                              final chatId = await ref.read(chatServiceProvider).getOrCreateChat(
+                                    schoolId: schoolId,
+                                    peerUid: peer.id,
+                                  );
+                              if (!context.mounted) return;
+                              context.go('/chat/$chatId');
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('No se pudo abrir el chat: $e')),
+                              );
+                            }
+                          },
                           child: const Text('Mensaje'),
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ))
               ],
             );
           },

@@ -7,7 +7,6 @@ import '../features/auth/session_provider.dart';
 import '../features/biblio/biblio_screen.dart';
 import '../features/bienvenida/bienvenida_screen.dart';
 import '../features/chat/chat_screen.dart';
-import '../features/chat/chat_thread_screen.dart';
 import '../features/events/events_screen.dart';
 import '../features/home/app_shell.dart';
 import '../features/home/welcome_screen.dart';
@@ -26,36 +25,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final sessionAsync = ref.watch(sessionStateProvider);
 
   return GoRouter(
+    // En web se abre normalmente en '/', y si no existe ruta se muestra pantalla en blanco.
+    // Mantén '/' como landing pública y usa '/splash' solo para loading.
     initialLocation: '/',
-    errorBuilder: (context, state) {
-      return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 40),
-                const SizedBox(height: 10),
-                Text('Ruta no disponible: ${state.uri}', textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => context.go('/'),
-                  child: const Text('Ir al inicio'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    },
     redirect: (context, state) {
       final location = state.matchedLocation;
-
+      final onWelcome = location == '/' || location == '/welcome';
       final onLogin = location == '/login';
       final onInvite = location == '/invite';
       final onSplash = location == '/splash';
-      final onWelcome = location == '/' || location == '/welcome';
 
       if (sessionAsync.isLoading) return onSplash ? null : '/splash';
       if (sessionAsync.hasError) return onSplash ? null : '/splash';
@@ -63,17 +41,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final session = sessionAsync.value!;
       switch (session.phase) {
         case SessionPhase.unauthenticated:
-          // Permitimos ver el inicio público. Todo lo demás requiere login.
-          if (onLogin || onWelcome) return null;
-          return '/welcome';
+          // App pública: landing informativa + acceso a login.
+          if (onWelcome || onLogin) return null;
+          return '/';
         case SessionPhase.needsInvite:
           return onInvite ? null : '/invite';
         case SessionPhase.ready:
-          // Evita quedarse en pantallas públicas/onboarding.
-          if (onLogin || onInvite || onSplash || onWelcome) return '/posts';
+          if (onWelcome || onLogin || onInvite || onSplash) return '/posts';
           return null;
       }
     },
+    errorBuilder: (context, state) => _RouterErrorScreen(state.error),
     routes: [
       GoRoute(path: '/', builder: (_, __) => const WelcomeScreen()),
       GoRoute(path: '/welcome', builder: (_, __) => const WelcomeScreen()),
@@ -86,20 +64,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [GoRoute(path: '/posts', builder: (_, __) => const PostsScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/events', builder: (_, __) => const EventsScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/matching', builder: (_, __) => const MatchingScreen())]),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/chat',
-                builder: (_, __) => const ChatScreen(),
-                routes: [
-                  GoRoute(
-                    path: ':chatId',
-                    builder: (context, state) => ChatThreadScreen(chatId: state.pathParameters['chatId']!),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          StatefulShellBranch(routes: [GoRoute(path: '/chat', builder: (_, __) => const ChatScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen())]),
         ],
       ),
@@ -135,6 +100,44 @@ class _RouterSplashScreen extends ConsumerWidget {
 
     return const Scaffold(
       body: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _RouterErrorScreen extends StatelessWidget {
+  const _RouterErrorScreen(this.error);
+
+  final Exception? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Página no disponible',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error?.toString() ?? 'Ruta no encontrada.',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => context.go('/'),
+                child: const Text('Ir al inicio'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
