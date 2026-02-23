@@ -18,6 +18,7 @@ class AppShell extends StatelessWidget {
           NavigationDestination(icon: Icon(Icons.swap_horiz), label: 'Busco/Ofrezco'),
           NavigationDestination(icon: Icon(Icons.event), label: 'Entre Padres'),
           NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
+          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Perfil'),
         ],
       ),

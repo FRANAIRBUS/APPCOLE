@@ -1,14 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function schoolUserDoc(schoolId) {
-      return /databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid);
+    function signedIn() {
+      return request.auth != null;
     }
-    function inSchool(schoolId) { return signedIn() && exists(schoolUserDoc(schoolId)); }
-    function myRole(schoolId) { return get(schoolUserDoc(schoolId)).data.role; }
-    function isStaff(schoolId) { return inSchool(schoolId) && (myRole(schoolId) in ['moderator', 'admin']); }
-    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    function userDocPath(schoolId, uid) {
+      return /databases/$(database)/documents/schools/$(schoolId)/users/$(uid);
+    }
+
+    function schoolUserDoc(schoolId) {
+      return userDocPath(schoolId, request.auth.uid);
+    }
+
+    function userExistsInSchool(schoolId, uid) {
+      return exists(userDocPath(schoolId, uid));
+    }
+
+    function inSchool(schoolId) {
+      return signedIn() && userExistsInSchool(schoolId, request.auth.uid);
+    }
+
+    function myRole(schoolId) {
+      return get(schoolUserDoc(schoolId)).data.role;
+    }
+
+    function isStaff(schoolId) {
+      return inSchool(schoolId) && (myRole(schoolId) in ['moderator', 'admin']);
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function chatDocPath(schoolId, chatId) {
+      return /databases/$(database)/documents/schools/$(schoolId)/chats/$(chatId);
+    }
+
+    function isChatParticipant(schoolId, chatId) {
+      return inSchool(schoolId)
+        && exists(chatDocPath(schoolId, chatId))
+        && request.auth.uid in get(chatDocPath(schoolId, chatId)).data.participants;
+    }
+
+    function validPostModule(module) {
+      return module in ['busco_ofrezco', 'talento', 'biblio', 'veteranos'];
+    }
 
     match /schools/{schoolId} {
       allow read: if inSchool(schoolId);
@@ -21,25 +58,59 @@ service cloud.firestore {
 
       match /users/{uid} {
         allow read: if inSchool(schoolId);
-        allow create: if isOwner(uid);
-        allow update: if isOwner(uid) || isStaff(schoolId);
-        allow delete: if isOwner(uid) || isStaff(schoolId);
+
+        // User membership docs are created/linked only by Cloud Functions after redeemInviteCode.
+        allow create: if false;
+
+        allow update: if inSchool(schoolId) && (
+          (
+            isOwner(uid)
+            && request.resource.data.keys().hasOnly([
+              'displayName',
+              'role',
+              'children',
+              'classIds',
+              'photoUrl',
+              'professional',
+              'createdAt',
+              'lastActiveAt',
+              'updatedAt'
+            ])
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.createdAt == resource.data.createdAt
+          )
+          || isStaff(schoolId)
+        );
+
+        allow delete: if inSchool(schoolId) && (isOwner(uid) || isStaff(schoolId));
       }
 
       match /posts/{postId} {
         allow read: if inSchool(schoolId);
+
         allow create: if inSchool(schoolId)
+          && request.resource.data.keys().hasAll(['module', 'type', 'title', 'body', 'authorUid', 'status'])
           && request.resource.data.authorUid == request.auth.uid
-          && request.resource.data.status == 'active';
+          && request.resource.data.status == 'active'
+          && validPostModule(request.resource.data.module)
+          && request.resource.data.title is string
+          && request.resource.data.body is string;
+
         allow update, delete: if inSchool(schoolId)
           && (resource.data.authorUid == request.auth.uid || isStaff(schoolId));
       }
 
       match /events/{eventId} {
         allow read: if inSchool(schoolId);
+
         allow create: if inSchool(schoolId)
+          && request.resource.data.keys().hasAll(['title', 'description', 'dateTime', 'place', 'organizerUid', 'status'])
           && request.resource.data.organizerUid == request.auth.uid
-          && request.resource.data.status == 'active';
+          && request.resource.data.status == 'active'
+          && request.resource.data.title is string
+          && request.resource.data.description is string
+          && request.resource.data.place is string;
+
         allow update, delete: if inSchool(schoolId)
           && (resource.data.organizerUid == request.auth.uid || isStaff(schoolId));
 
@@ -49,9 +120,42 @@ service cloud.firestore {
         }
       }
 
+      match /chats/{chatId} {
+        allow read: if isChatParticipant(schoolId, chatId) || isStaff(schoolId);
+
+        // Chats are created by Cloud Function getOrCreateChat.
+        allow create: if false;
+
+        allow update: if (
+            isChatParticipant(schoolId, chatId)
+            && request.resource.data.keys().hasOnly(['participants', 'createdAt', 'updatedAt', 'lastMessage', 'lastMessageAt'])
+            && request.resource.data.participants == resource.data.participants
+            && request.resource.data.createdAt == resource.data.createdAt
+          )
+          || isStaff(schoolId);
+
+        allow delete: if false;
+
+        match /messages/{messageId} {
+          allow read: if isChatParticipant(schoolId, chatId) || isStaff(schoolId);
+
+          allow create: if isChatParticipant(schoolId, chatId)
+            && request.resource.data.keys().hasOnly(['senderUid', 'text', 'createdAt'])
+            && request.resource.data.senderUid == request.auth.uid
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000;
+
+          allow update, delete: if false;
+        }
+      }
+
       match /reports/{reportId} {
         allow create: if inSchool(schoolId)
-          && request.resource.data.reporterUid == request.auth.uid;
+          && request.resource.data.keys().hasAll(['targetType', 'targetPath', 'reason', 'reporterUid', 'status'])
+          && request.resource.data.reporterUid == request.auth.uid
+          && request.resource.data.status == 'open';
+
         allow read, update: if isStaff(schoolId);
         allow delete: if false;
       }
@@ -59,9 +163,23 @@ service cloud.firestore {
       match /connections/{connectionId} {
         allow read: if inSchool(schoolId)
           && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isStaff(schoolId));
-        allow create: if inSchool(schoolId) && request.resource.data.fromUid == request.auth.uid;
+
+        allow create: if inSchool(schoolId)
+          && request.resource.data.keys().hasAll(['fromUid', 'toUid', 'status'])
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.toUid is string
+          && request.resource.data.toUid != request.auth.uid
+          && userExistsInSchool(schoolId, request.resource.data.toUid)
+          && request.resource.data.status == 'pending';
+
         allow update: if inSchool(schoolId)
-          && (resource.data.toUid == request.auth.uid || isStaff(schoolId));
+          && (
+            (resource.data.toUid == request.auth.uid
+              && request.resource.data.fromUid == resource.data.fromUid
+              && request.resource.data.toUid == resource.data.toUid)
+            || isStaff(schoolId)
+          );
+
         allow delete: if false;
       }
 
