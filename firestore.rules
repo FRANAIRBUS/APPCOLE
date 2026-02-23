@@ -27,9 +27,13 @@ service cloud.firestore {
       }
 
       match /users/{uid} {
-        allow read: if inSchool(schoolId);
+        // Permite al usuario leer su propio documento aunque aún no haya "inSchool"
+        // (necesario para resolver membresía desde collectionGroup durante onboarding)
+        allow read: if isOwner(uid) || inSchool(schoolId);
+
         // Alta de membresía solo por Cloud Function (Admin SDK)
         allow create: if false;
+
         allow update: if isOwner(uid) || isStaff(schoolId);
         allow delete: if isOwner(uid) || isStaff(schoolId);
       }

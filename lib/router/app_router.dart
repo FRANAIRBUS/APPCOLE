@@ -68,15 +68,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _RouterSplashScreen extends StatelessWidget {
+class _RouterSplashScreen extends ConsumerWidget {
   const _RouterSplashScreen();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionAsync = ref.watch(sessionStateProvider);
+
+    if (sessionAsync.hasError) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Error de sesión:\n${sessionAsync.error}',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }
