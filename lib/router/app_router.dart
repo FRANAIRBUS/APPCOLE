@@ -7,6 +7,7 @@ import '../features/auth/session_provider.dart';
 import '../features/biblio/biblio_screen.dart';
 import '../features/bienvenida/bienvenida_screen.dart';
 import '../features/chat/chat_screen.dart';
+import '../features/chat/chat_thread_screen.dart';
 import '../features/events/events_screen.dart';
 import '../features/home/app_shell.dart';
 import '../features/home/welcome_screen.dart';
@@ -64,7 +65,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [GoRoute(path: '/posts', builder: (_, __) => const PostsScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/events', builder: (_, __) => const EventsScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/matching', builder: (_, __) => const MatchingScreen())]),
-          StatefulShellBranch(routes: [GoRoute(path: '/chat', builder: (_, __) => const ChatScreen())]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/chat',
+                builder: (_, __) => const ChatScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':chatId',
+                    builder: (_, state) => ChatThreadScreen(chatId: state.pathParameters['chatId']!),
+                  ),
+                ],
+              ),
+            ],
+          ),
           StatefulShellBranch(routes: [GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen())]),
         ],
       ),
