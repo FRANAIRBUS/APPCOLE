@@ -1,8 +1,20 @@
+
+De local a github
+
 git status
 git add .
 git commit -m "Actualiza X"
 git push origin main
 
+
+De github a local
+
+git fetch origin
+git status
+git pull --rebase origin main
+
+
+Ejecuta scripts/ci_local.sh
 
 flutter run -d web-server --web-port 8081 --web-hostname 0.0.0.0
 
