@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "593927143784",
+    "project_id": "redfamcole-488212",
+    "storage_bucket": "redfamcole-488212.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:593927143784:android:c2e78f618527803a7956dd",
+        "android_client_info": {
+          "package_name": "com.example.coleconecta"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "593927143784-kft2o118gk54of0g1pvn0d60oh3p5i5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCG2Yq6QBpOweBk5-e9qmYi4O48QRNHc8w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "593927143784-kft2o118gk54of0g1pvn0d60oh3p5i5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "593927143784-npesam9clu5b272li1lefaa38g12hub3.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.workspaces"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:593927143784:android:ab41159c4ee1edc57956dd",
+        "android_client_info": {
+          "package_name": "com.example.workspaces"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "593927143784-kft2o118gk54of0g1pvn0d60oh3p5i5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCG2Yq6QBpOweBk5-e9qmYi4O48QRNHc8w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "593927143784-kft2o118gk54of0g1pvn0d60oh3p5i5m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "593927143784-npesam9clu5b272li1lefaa38g12hub3.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.workspaces"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

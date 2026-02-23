@@ -15,20 +15,21 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'replace-with-web-api-key',
-    appId: '1:1234567890:web:replace',
-    messagingSenderId: '1234567890',
-    projectId: 'replace-project-id',
-    authDomain: 'replace-project-id.firebaseapp.com',
-    storageBucket: 'replace-project-id.appspot.com',
+    apiKey: 'AIzaSyAHDHHMITdUxz1hm7EZDH2DSLgad3pWGsk',
+    appId: '1:593927143784:web:0bcdae3e14e091797956dd',
+    messagingSenderId: '593927143784',
+    projectId: 'redfamcole-488212',
+    authDomain: 'redfamcole-488212.firebaseapp.com',
+    storageBucket: 'redfamcole-488212.firebasestorage.app',
+    measurementId: 'G-50H9JNEV83',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'replace-with-android-api-key',
-    appId: '1:1234567890:android:replace',
-    messagingSenderId: '1234567890',
-    projectId: 'replace-project-id',
-    storageBucket: 'replace-project-id.appspot.com',
+    apiKey: 'AIzaSyCG2Yq6QBpOweBk5-e9qmYi4O48QRNHc8w',
+    appId: '1:593927143784:android:c2e78f618527803a7956dd',
+    messagingSenderId: '593927143784',
+    projectId: 'redfamcole-488212',
+    storageBucket: 'redfamcole-488212.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
