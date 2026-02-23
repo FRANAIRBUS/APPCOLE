@@ -78,8 +78,8 @@ class ColeConectaApp extends ConsumerWidget {
         navigationBarTheme: NavigationBarThemeData(
           elevation: 0,
           backgroundColor: base.colorScheme.surface,
-          indicatorColor: base.colorScheme.primary.withOpacity(0.12),
-          labelTextStyle: MaterialStatePropertyAll(base.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+          indicatorColor: base.colorScheme.primary.withValues(alpha: 0.12),
+          labelTextStyle: WidgetStatePropertyAll(base.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
         ),
         dividerTheme: DividerThemeData(color: base.colorScheme.outlineVariant),
       ),

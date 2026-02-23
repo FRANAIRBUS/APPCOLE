@@ -75,13 +75,13 @@ class _HeroPanel extends StatelessWidget {
             style: Theme.of(context)
                 .textTheme
                 .titleLarge
-                ?.copyWith(color: cs.onPrimaryContainer.withOpacity(0.95)),
+                ?.copyWith(color: cs.onPrimaryContainer.withValues(alpha: 0.95)),
           ),
           const SizedBox(height: 18),
-          Wrap(
+          const Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: const [
+            children: [
               _Pill(icon: Icons.lock_outline, label: 'Privada por invitación'),
               _Pill(icon: Icons.domain_verification_outlined, label: 'Multi-colegio aislado'),
               _Pill(icon: Icons.no_cell_outlined, label: 'Sin teléfonos visibles'),
@@ -107,7 +107,7 @@ class _HeroPanel extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             'ColeConecta no es una red social. Es un entorno privado para ayudar, compartir y coordinarte con familias del mismo colegio.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onPrimaryContainer.withOpacity(0.85)),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onPrimaryContainer.withValues(alpha: 0.85)),
           ),
         ],
       ),
@@ -127,7 +127,7 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: cs.surface.withOpacity(0.55),
+        color: cs.surface.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: cs.outlineVariant),
       ),
@@ -160,9 +160,9 @@ class _StepRow extends StatelessWidget {
           height: 26,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.15),
+            color: cs.primary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: cs.primary.withOpacity(0.35)),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
           ),
           child: Text(
             '$index',
@@ -283,9 +283,9 @@ class _ModuleTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.10),
+              color: cs.primary.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.primary.withOpacity(0.22)),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.22)),
             ),
             child: Icon(icon, color: cs.primary),
           ),

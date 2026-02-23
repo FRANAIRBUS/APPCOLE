@@ -9,6 +9,15 @@ import '../../features/auth/session_provider.dart';
 class ChatScreen extends ConsumerWidget {
   const ChatScreen({super.key});
 
+  String _relativeDate(Timestamp? timestamp) {
+    if (timestamp == null) return '';
+    final diff = DateTime.now().difference(timestamp.toDate());
+    if (diff.inMinutes < 1) return 'ahora';
+    if (diff.inHours < 1) return '${diff.inMinutes}m';
+    if (diff.inDays < 1) return '${diff.inHours}h';
+    return '${diff.inDays}d';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
@@ -26,6 +35,13 @@ class ChatScreen extends ConsumerWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: chatsStream,
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('No se pudieron cargar tus chats: ${snapshot.error}'));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         final docs = [...(snapshot.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[])];
         docs.sort((a, b) {
           final aTs = a.data()['lastMessageAt'];
@@ -54,6 +70,7 @@ class ChatScreen extends ConsumerWidget {
             final participants = (data['participants'] as List?)?.cast<String>() ?? const <String>[];
             final peerUid = participants.firstWhere((p) => p != uid, orElse: () => '');
             final lastMessage = (data['lastMessage'] as String?)?.trim() ?? '';
+            final lastMessageAt = data['lastMessageAt'] as Timestamp?;
 
             final peerStream = peerUid.isEmpty
                 ? const Stream<DocumentSnapshot<Map<String, dynamic>>>.empty()
@@ -66,14 +83,25 @@ class ChatScreen extends ConsumerWidget {
                 final title = (peerName?.trim().isNotEmpty == true) ? peerName!.trim() : (peerUid.isEmpty ? 'Chat' : peerUid);
 
                 return ListTile(
+                  leading: CircleAvatar(
+                    child: Text(
+                      (title.trim().isEmpty ? 'C' : title.trim().substring(0, 1)).toUpperCase(),
+                    ),
+                  ),
                   title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(
                     lastMessage.isEmpty ? 'Sin mensajes' : lastMessage,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.go('/chat/$chatId'),
+                  trailing: Text(
+                    _relativeDate(lastMessageAt),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  onTap: () => context.push('/chat/$chatId'),
                 );
               },
             );

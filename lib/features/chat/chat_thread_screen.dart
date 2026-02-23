@@ -20,6 +20,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _scrollCtrl = ScrollController();
   bool _sending = false;
 
+  String _hourLabel(Timestamp? ts) {
+    if (ts == null) return '';
+    final d = ts.toDate();
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
     _msgCtrl.dispose();
@@ -32,6 +38,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (uid == null) return;
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
+    if (text.length > 600) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El mensaje es demasiado largo (máx. 600).')),
+      );
+      return;
+    }
 
     setState(() => _sending = true);
     try {
@@ -100,6 +112,13 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                     child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: messagesStream,
                       builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Center(child: Text('No se pudo cargar el chat: ${snapshot.error}'));
+                        }
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
                         final docs = snapshot.data?.docs ?? const [];
                         if (docs.isEmpty) {
                           return const Center(child: Text('Sin mensajes todavía'));
@@ -116,6 +135,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                             final status = data['status'] as String?;
                             final rawText = (data['text'] as String?) ?? '';
                             final text = (status == 'deleted' || rawText.isEmpty) ? 'Mensaje eliminado' : rawText;
+                            final createdAt = data['createdAt'] as Timestamp?;
 
                             return Align(
                               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -125,7 +145,22 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                                   margin: const EdgeInsets.symmetric(vertical: 4),
                                   child: Padding(
                                     padding: const EdgeInsets.all(10),
-                                    child: Text(text),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(text),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _hourLabel(createdAt),
+                                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -146,6 +181,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                               controller: _msgCtrl,
                               minLines: 1,
                               maxLines: 3,
+                              maxLength: 600,
                               decoration: const InputDecoration(
                                 labelText: 'Escribe un mensaje',
                                 border: OutlineInputBorder(),

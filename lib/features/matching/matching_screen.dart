@@ -21,8 +21,22 @@ class MatchingScreen extends ConsumerWidget {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: meDoc,
       builder: (context, meSnapshot) {
+        if (meSnapshot.hasError) {
+          return Center(child: Text('No se pudo cargar tu perfil: ${meSnapshot.error}'));
+        }
+        if (meSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         final myClassIds = (meSnapshot.data?.data()?['classIds'] as List?)?.cast<String>() ?? const [];
-        if (myClassIds.isEmpty) return const Center(child: Text('Aún no tienes clases asignadas.'));
+        if (myClassIds.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Aún no tienes clases asignadas. Pide al colegio que complete tu perfil.'),
+            ),
+          );
+        }
 
         final peersQuery = FirebaseFirestore.instance
             .collection('schools/$schoolId/users')
@@ -33,6 +47,13 @@ class MatchingScreen extends ConsumerWidget {
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: peersQuery,
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('No se pudo cargar familias de tu clase: ${snapshot.error}'));
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
             final peers = snapshot.data?.docs.where((d) => d.id != uid).toList() ?? [];
             peers.sort((a, b) {
               int overlap(Map<String, dynamic> data) {
@@ -43,14 +64,44 @@ class MatchingScreen extends ConsumerWidget {
               return overlap(b.data()).compareTo(overlap(a.data()));
             });
 
+            if (peers.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Todavía no hay otras familias con clases en común.'),
+                ),
+              );
+            }
+
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text('Mi Clase', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(
+                  'Mi Clase',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Encuentra familias con aulas en común y abre chat directo.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
                 ...peers.map((peer) => Card(
                       child: ListTile(
+                        leading: CircleAvatar(
+                          child: Text(
+                            (((peer.data()['displayName'] as String?) ?? 'F').trim().isEmpty
+                                    ? 'F'
+                                    : ((peer.data()['displayName'] as String?) ?? 'F').trim().substring(0, 1))
+                                .toUpperCase(),
+                          ),
+                        ),
                         title: Text(peer.data()['displayName'] ?? 'Familia'),
-                        subtitle: Text('Clases en común: ${((peer.data()['classIds'] as List?) ?? []).where(myClassIds.contains).length}'),
+                        subtitle:
+                            Text('Clases en común: ${((peer.data()['classIds'] as List?) ?? []).where(myClassIds.contains).length}'),
                         trailing: OutlinedButton(
                           onPressed: () async {
                             try {

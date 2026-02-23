@@ -238,7 +238,7 @@ class _PostComposerSheetState extends State<_PostComposerSheet> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _type,
+                  initialValue: _type,
                   decoration: const InputDecoration(labelText: 'Tipo'),
                   items: const [
                     DropdownMenuItem(value: 'busco', child: Text('Busco')),
