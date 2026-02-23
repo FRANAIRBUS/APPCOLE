@@ -17,71 +17,39 @@ class ColeConectaApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+
     final base = ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
       useMaterial3: true,
     );
+
     return MaterialApp.router(
       title: 'ColeConecta',
       theme: base.copyWith(
-        visualDensity: VisualDensity.standard,
-        appBarTheme: AppBarTheme(
-          centerTitle: false,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-          backgroundColor: base.colorScheme.surface,
-          foregroundColor: base.colorScheme.onSurface,
-          titleTextStyle: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-        ),
+        appBarTheme: const AppBarTheme(centerTitle: false),
         cardTheme: CardTheme(
           elevation: 0,
-          margin: EdgeInsets.zero,
-          color: base.colorScheme.surface,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: base.colorScheme.outlineVariant),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: base.colorScheme.surfaceContainerHighest,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: base.colorScheme.outlineVariant),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: base.colorScheme.outlineVariant),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: base.colorScheme.primary, width: 1.4),
-          ),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            textStyle: base.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            side: BorderSide(color: base.colorScheme.outlineVariant),
-            textStyle: base.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
-        navigationBarTheme: NavigationBarThemeData(
-          elevation: 0,
-          backgroundColor: base.colorScheme.surface,
-          indicatorColor: base.colorScheme.primary.withOpacity(0.12),
-          labelTextStyle: MaterialStatePropertyAll(base.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
-        dividerTheme: DividerThemeData(color: base.colorScheme.outlineVariant),
       ),
       routerConfig: router,
     );

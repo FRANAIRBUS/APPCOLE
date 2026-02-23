@@ -6,138 +6,161 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    Widget featureCard({required IconData icon, required String title, required String body}) {
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 26),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    Text(body, style: theme.textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 980;
-            final padding = wide ? const EdgeInsets.symmetric(horizontal: 48, vertical: 28) : const EdgeInsets.all(20);
-
-            final content = _WelcomeContent(
-              onLogin: () => context.go('/login'),
-            );
-
-            if (!wide) return Padding(padding: padding, child: content);
-
-            return Padding(
-              padding: padding,
-              child: Row(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(flex: 6, child: _HeroPanel()),
-                  const SizedBox(width: 36),
-                  Expanded(flex: 5, child: content),
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(Icons.school, color: theme.colorScheme.onPrimaryContainer),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('ColeConecta', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Red privada de confianza entre familias del mismo colegio. Sin teléfonos, sin exposición, sin ruido.',
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    elevation: 0,
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Cómo funciona', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 10),
+                          _StepRow(index: '1', text: 'Creas tu cuenta (email, Google o Apple).'),
+                          _StepRow(index: '2', text: 'Introduces el código de invitación del colegio.'),
+                          _StepRow(index: '3', text: 'Accedes a tu comunidad: publicaciones, eventos, mi clase y chat 1:1.'),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: () => context.go('/login'),
+                                icon: const Icon(Icons.login),
+                                label: const Text('Entrar'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => context.go('/login'),
+                                icon: const Icon(Icons.person_add_alt),
+                                label: const Text('Crear cuenta'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Módulos del MVP', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  featureCard(
+                    icon: Icons.swap_horiz,
+                    title: 'Busco / Ofrezco',
+                    body: 'Ayuda entre familias: recogidas, intercambios, recomendaciones y necesidades puntuales.',
+                  ),
+                  featureCard(
+                    icon: Icons.event,
+                    title: 'Entre Padres',
+                    body: 'Eventos y planes entre familias: quedadas, parques, celebraciones, avisos de interés.',
+                  ),
+                  featureCard(
+                    icon: Icons.groups,
+                    title: 'Mi Clase',
+                    body: 'Matching por clase: encuentra familias con hijos en tus clases, sin compartir teléfonos.',
+                  ),
+                  featureCard(
+                    icon: Icons.work_outline,
+                    title: 'Talento del Cole',
+                    body: 'Directorio profesional interno + anuncios (servicios, oficios, clases particulares).',
+                  ),
+                  featureCard(
+                    icon: Icons.auto_stories_outlined,
+                    title: 'BiblioCircular',
+                    body: 'Intercambio de libros y material escolar dentro del colegio.',
+                  ),
+                  featureCard(
+                    icon: Icons.tips_and_updates_outlined,
+                    title: 'Trucos de los Veteranos',
+                    body: 'Consejos reales: qué llevar, qué evitar, cómo sobrevivir al primer mes.',
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Privacidad (no negociable)', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _Bullet(text: 'No se muestran teléfonos.'),
+                          _Bullet(text: 'No se permiten fotos de menores.'),
+                          _Bullet(text: 'Aislamiento estricto por colegio (schoolId).'),
+                          _Bullet(text: 'Borrado completo de cuenta (GDPR).'),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            );
-          },
+            ),
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _HeroPanel extends StatelessWidget {
-  const _HeroPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [cs.primaryContainer, cs.secondaryContainer],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.school_outlined, size: 28, color: cs.onPrimaryContainer),
-              const SizedBox(width: 10),
-              Text(
-                'ColeConecta',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.w800, color: cs.onPrimaryContainer),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'La red privada de confianza entre familias del mismo colegio.',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(color: cs.onPrimaryContainer.withOpacity(0.95)),
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: const [
-              _Pill(icon: Icons.lock_outline, label: 'Privada por invitación'),
-              _Pill(icon: Icons.domain_verification_outlined, label: 'Multi-colegio aislado'),
-              _Pill(icon: Icons.no_cell_outlined, label: 'Sin teléfonos visibles'),
-              _Pill(icon: Icons.chat_bubble_outline, label: 'Chat 1:1 interno'),
-            ],
-          ),
-          const SizedBox(height: 22),
-          const Divider(height: 1),
-          const SizedBox(height: 18),
-          Text(
-            'Cómo funciona',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700, color: cs.onPrimaryContainer),
-          ),
-          const SizedBox(height: 10),
-          const _StepRow(index: 1, text: 'Inicia sesión o crea tu cuenta.'),
-          const SizedBox(height: 8),
-          const _StepRow(index: 2, text: 'Introduce el código de invitación del colegio.'),
-          const SizedBox(height: 8),
-          const _StepRow(index: 3, text: 'Accede a tu clase y conecta con otras familias.'),
-          const SizedBox(height: 18),
-          Text(
-            'ColeConecta no es una red social. Es un entorno privado para ayudar, compartir y coordinarte con familias del mismo colegio.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onPrimaryContainer.withOpacity(0.85)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surface.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: cs.onSurface),
-          const SizedBox(width: 8),
-          Text(label, style: Theme.of(context).textTheme.labelLarge),
-        ],
       ),
     );
   }
@@ -146,160 +169,36 @@ class _Pill extends StatelessWidget {
 class _StepRow extends StatelessWidget {
   const _StepRow({required this.index, required this.text});
 
-  final int index;
+  final String index;
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: cs.primary.withOpacity(0.35)),
-          ),
-          child: Text(
-            '$index',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, color: cs.primary),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
-      ],
-    );
-  }
-}
-
-class _WelcomeContent extends StatelessWidget {
-  const _WelcomeContent({required this.onLogin});
-
-  final VoidCallback onLogin;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (MediaQuery.of(context).size.width < 980) ...[
-          Row(
-            children: [
-              Icon(Icons.school_outlined, color: cs.primary),
-              const SizedBox(width: 8),
-              Text('ColeConecta', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Red privada de familias por colegio.',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Accede por invitación. Sin teléfonos visibles. Sin fotos de menores. Chat interno y módulos útiles para el día a día.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-          ),
-          const SizedBox(height: 18),
-        ],
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Módulos del MVP', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 10),
-                const _ModuleTile(icon: Icons.handshake_outlined, title: 'Busco / Ofrezco', desc: 'Ayuda rápida entre familias.'),
-                const _ModuleTile(icon: Icons.event_outlined, title: 'Entre Padres', desc: 'Eventos y quedadas.'),
-                const _ModuleTile(icon: Icons.groups_outlined, title: 'Mi Clase', desc: 'Matching por clase (classIds).'),
-                const _ModuleTile(icon: Icons.chat_bubble_outline, title: 'Chat interno', desc: 'Conversaciones 1:1 sin exponer teléfonos.'),
-                const Divider(height: 22),
-                const _ModuleTile(icon: Icons.star_border, title: 'Talento del Cole', desc: 'Comparte oficios/habilidades (adultos).'),
-                const _ModuleTile(icon: Icons.menu_book_outlined, title: 'BiblioCircular', desc: 'Libros que rotan: presta/recibe.'),
-                const _ModuleTile(icon: Icons.lightbulb_outline, title: 'Trucos de Veteranos', desc: 'Consejos prácticos y experiencias.'),
-                const _ModuleTile(icon: Icons.flag_outlined, title: 'Primer Día, Cero Dudas', desc: 'Checklist y guía de inicio.'),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Privacidad (no negociable)',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 10),
-                const _Bullet(text: 'Acceso solo por invitación del colegio.'),
-                const _Bullet(text: 'Aislamiento estricto por schoolId (multi-colegio).'),
-                const _Bullet(text: 'No teléfonos visibles, no fotos de menores.'),
-                const _Bullet(text: 'Borrado completo de cuenta (deleteMyAccount).'),
-              ],
-            ),
-          ),
-        ),
-        const Spacer(),
-        FilledButton.icon(
-          onPressed: onLogin,
-          icon: const Icon(Icons.login),
-          label: const Text('Entrar / Crear cuenta'),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Al iniciar sesión podrás introducir el código de invitación del colegio.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-}
-
-class _ModuleTile extends StatelessWidget {
-  const _ModuleTile({required this.icon, required this.title, required this.desc});
-
-  final IconData icon;
-  final String title;
-  final String desc;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.primary.withOpacity(0.22)),
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, color: cs.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text(desc, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-              ],
+            child: Center(
+              child: Text(
+                index,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );
@@ -313,15 +212,15 @@ class _Bullet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle_outline, size: 18, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+          Icon(Icons.check_circle, size: 18, color: theme.colorScheme.tertiary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );
