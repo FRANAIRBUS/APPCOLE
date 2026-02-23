@@ -34,7 +34,7 @@ class ColeConectaApp extends ConsumerWidget {
           foregroundColor: base.colorScheme.onSurface,
           titleTextStyle: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 0,
           margin: EdgeInsets.zero,
           color: base.colorScheme.surface,

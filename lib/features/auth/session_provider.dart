@@ -9,29 +9,38 @@ final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore
 final authServiceProvider = Provider<AuthService>((ref) => AuthService(ref.read(firebaseAuthProvider)));
 final authStateProvider = StreamProvider<User?>((ref) => ref.read(authServiceProvider).authStateChanges());
 
+Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, String uid) async* {
+  await for (final schoolsSnap in firestore.collection('schools').snapshots()) {
+    if (schoolsSnap.docs.isEmpty) {
+      yield null;
+      continue;
+    }
+
+    final checks = await Future.wait(
+      schoolsSnap.docs.map((schoolDoc) async {
+        final userDoc = await schoolDoc.reference.collection('users').doc(uid).get();
+        if (!userDoc.exists) return (schoolId: null as String?, lastActiveMs: 0);
+
+        final ts = userDoc.data()?['lastActiveAt'];
+        final ms = ts is Timestamp ? ts.millisecondsSinceEpoch : 0;
+        return (schoolId: schoolDoc.id, lastActiveMs: ms);
+      }),
+    );
+
+    checks.sort((a, b) => b.lastActiveMs.compareTo(a.lastActiveMs));
+    final match = checks.firstWhere(
+      (entry) => entry.schoolId != null,
+      orElse: () => (schoolId: null, lastActiveMs: 0),
+    );
+    yield match.schoolId;
+  }
+}
+
 final schoolIdProvider = StreamProvider<String?>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(null);
 
-  return ref
-      .read(firestoreProvider)
-      .collectionGroup('users')
-      .where(FieldPath.documentId, isEqualTo: user.uid)
-      .snapshots()
-      .map((snap) {
-        if (snap.docs.isEmpty) return null;
-
-        final docs = [...snap.docs];
-        docs.sort((a, b) {
-          final aTs = a.data()['lastActiveAt'];
-          final bTs = b.data()['lastActiveAt'];
-          final aMs = aTs is Timestamp ? aTs.millisecondsSinceEpoch : 0;
-          final bMs = bTs is Timestamp ? bTs.millisecondsSinceEpoch : 0;
-          return bMs.compareTo(aMs);
-        });
-
-        return docs.first.reference.parent.parent?.id;
-      });
+  return _resolveSchoolIdStream(ref.read(firestoreProvider), user.uid);
 });
 
 enum SessionPhase { unauthenticated, needsInvite, ready }

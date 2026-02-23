@@ -34,7 +34,9 @@ service cloud.firestore {
     }
 
     match /schools/{schoolId} {
-      allow read: if inSchool(schoolId);
+      // Permite al cliente autenticado enumerar escuelas para resolver su membresía
+      // (el acceso a datos sensibles sigue restringido en subcolecciones).
+      allow read: if signedIn();
       allow write: if false;
 
       match /classes/{classId} {
