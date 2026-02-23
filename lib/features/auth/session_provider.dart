@@ -9,95 +9,75 @@ final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore
 final authServiceProvider = Provider<AuthService>((ref) => AuthService(ref.read(firebaseAuthProvider)));
 final authStateProvider = StreamProvider<User?>((ref) => ref.read(authServiceProvider).authStateChanges());
 
-final userMembershipDocsProvider = StreamProvider.family<List<QueryDocumentSnapshot<Map<String, dynamic>>>, String>((ref, uid) {
+final schoolIdProvider = StreamProvider<String?>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(null);
+
   return ref
       .read(firestoreProvider)
       .collectionGroup('users')
-      .where(FieldPath.documentId, isEqualTo: uid)
+      .where(FieldPath.documentId, isEqualTo: user.uid)
       .snapshots()
       .map((snap) {
+        if (snap.docs.isEmpty) return null;
+
         final docs = [...snap.docs];
         docs.sort((a, b) {
-          final aTs = _timestampFrom(a.data()['lastActiveAt']) ?? _timestampFrom(a.data()['createdAt']);
-          final bTs = _timestampFrom(b.data()['lastActiveAt']) ?? _timestampFrom(b.data()['createdAt']);
-          final aMicros = aTs?.microsecondsSinceEpoch ?? 0;
-          final bMicros = bTs?.microsecondsSinceEpoch ?? 0;
-          return bMicros.compareTo(aMicros);
+          final aTs = a.data()['lastActiveAt'];
+          final bTs = b.data()['lastActiveAt'];
+          final aMs = aTs is Timestamp ? aTs.millisecondsSinceEpoch : 0;
+          final bMs = bTs is Timestamp ? bTs.millisecondsSinceEpoch : 0;
+          return bMs.compareTo(aMs);
         });
-        return docs;
+
+        return docs.first.reference.parent.parent?.id;
       });
 });
+
+enum SessionPhase { unauthenticated, needsInvite, ready }
+
+class SessionState {
+  const SessionState._({
+    required this.phase,
+    this.user,
+    this.schoolId,
+  });
+
+  const SessionState.unauthenticated() : this._(phase: SessionPhase.unauthenticated);
+
+  const SessionState.needsInvite(User user)
+      : this._(phase: SessionPhase.needsInvite, user: user);
+
+  const SessionState.ready({required User user, required String schoolId})
+      : this._(phase: SessionPhase.ready, user: user, schoolId: schoolId);
+
+  final SessionPhase phase;
+  final User? user;
+  final String? schoolId;
+
+  bool get isAuthenticated => user != null;
+}
 
 final sessionStateProvider = Provider<AsyncValue<SessionState>>((ref) {
   final authAsync = ref.watch(authStateProvider);
 
   return authAsync.when(
     loading: () => const AsyncLoading(),
-    error: (error, stackTrace) => AsyncError(error, stackTrace),
+    error: (error, stack) => AsyncError(error, stack),
     data: (user) {
-      if (user == null) {
-        return const AsyncData(SessionState.unauthenticated());
-      }
+      if (user == null) return const AsyncData(SessionState.unauthenticated());
 
-      final membershipsAsync = ref.watch(userMembershipDocsProvider(user.uid));
-      return membershipsAsync.when(
+      final schoolAsync = ref.watch(schoolIdProvider);
+      return schoolAsync.when(
         loading: () => const AsyncLoading(),
-        error: (error, stackTrace) => AsyncError(error, stackTrace),
-        data: (docs) {
-          if (docs.isEmpty) {
+        error: (error, stack) => AsyncError(error, stack),
+        data: (schoolId) {
+          if (schoolId == null) {
             return AsyncData(SessionState.needsInvite(user));
           }
-
-          final schoolId = docs.first.reference.parent.parent?.id;
-          if (schoolId == null || schoolId.isEmpty) {
-            return AsyncData(SessionState.needsInvite(user));
-          }
-
           return AsyncData(SessionState.ready(user: user, schoolId: schoolId));
         },
       );
     },
   );
 });
-
-final schoolIdProvider = Provider<AsyncValue<String?>>((ref) {
-  final sessionAsync = ref.watch(sessionStateProvider);
-  return sessionAsync.whenData((session) => session.schoolId);
-});
-
-Timestamp? _timestampFrom(dynamic value) {
-  if (value is Timestamp) return value;
-  return null;
-}
-
-enum SessionStatus { unauthenticated, needsInvite, ready }
-
-class SessionState {
-  const SessionState._({
-    required this.status,
-    this.user,
-    this.schoolId,
-  });
-
-  const SessionState.unauthenticated()
-      : this._(
-          status: SessionStatus.unauthenticated,
-        );
-
-  SessionState.needsInvite(User user)
-      : this._(
-          status: SessionStatus.needsInvite,
-          user: user,
-        );
-
-  SessionState.ready({required User user, required String schoolId})
-      : this._(
-          status: SessionStatus.ready,
-          user: user,
-          schoolId: schoolId,
-        );
-
-  final SessionStatus status;
-  final User? user;
-  final String? schoolId;
-}

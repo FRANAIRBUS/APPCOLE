@@ -1,7 +1,7 @@
 const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
-const {getFirestore, FieldValue} = require('firebase-admin/firestore');
+const {FieldPath, FieldValue, getFirestore} = require('firebase-admin/firestore');
 const {getStorage} = require('firebase-admin/storage');
 
 initializeApp();
@@ -13,192 +13,158 @@ function assertAuth(request) {
   return uid;
 }
 
-function cleanString(value) {
-  return String(value || '').trim();
+function normalizeChildren(rawChildren) {
+  if (!Array.isArray(rawChildren)) return [];
+  return rawChildren
+    .map((item) => ({
+      name: String(item?.name || '').trim(),
+      age: Number(item?.age || 0),
+      classId: String(item?.classId || '').trim(),
+    }))
+    .filter((c) => c.name && Number.isFinite(c.age) && c.age > 0);
 }
 
-function normalizeInviteCode(code) {
-  return cleanString(code).toUpperCase();
-}
-
-function childKey(child) {
-  const name = cleanString(child?.name).toLowerCase();
-  const age = Number(child?.age || 0);
-  const classId = cleanString(child?.classId).toUpperCase();
-  return `${name}|${age}|${classId}`;
-}
-
-function mergeChildren(existingChildren, nextChild) {
-  const safeExisting = Array.isArray(existingChildren) ? existingChildren : [];
-  const merged = [];
-  const seen = new Set();
-
-  for (const raw of [...safeExisting, nextChild]) {
-    const name = cleanString(raw?.name);
-    const age = Number(raw?.age || 0);
-    const classId = cleanString(raw?.classId);
-    if (!name || !Number.isFinite(age) || age <= 0) continue;
-
-    const normalized = {
-      name,
-      age,
-      classId,
-    };
-
-    const key = childKey(normalized);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(normalized);
-  }
-
-  return merged;
-}
-
-function mergeClassIds(existingClassIds, extraClassId) {
-  const values = Array.isArray(existingClassIds) ? existingClassIds.map((v) => cleanString(v)).filter(Boolean) : [];
-  const candidate = cleanString(extraClassId);
-  if (candidate) values.push(candidate);
-  return [...new Set(values)];
-}
-
-function pickDisplayName(request) {
-  return cleanString(request.auth?.token?.name) || cleanString(request.auth?.token?.email) || 'Familia';
+function mergeChildren(existingChildren, newChild) {
+  const normalized = normalizeChildren(existingChildren);
+  const key = `${newChild.name.toLowerCase()}|${newChild.age}|${newChild.classId}`;
+  const hasChild = normalized.some(
+    (c) => `${c.name.toLowerCase()}|${c.age}|${c.classId}` === key,
+  );
+  if (!hasChild) normalized.push(newChild);
+  return normalized;
 }
 
 exports.redeemInviteCode = onCall(async (request) => {
   const uid = assertAuth(request);
-  const code = normalizeInviteCode(request.data?.code);
-  const childName = cleanString(request.data?.childName);
+  const code = String(request.data?.code || '').trim().toUpperCase();
+  const childName = String(request.data?.childName || '').trim();
   const childAge = Number(request.data?.childAge || 0);
-  const requestedClassId = cleanString(request.data?.classId);
+  const requestedClassId = String(request.data?.classId || '').trim();
 
   if (!code || !childName || !Number.isFinite(childAge) || childAge <= 0) {
     throw new HttpsError('invalid-argument', 'code, childName and childAge are required');
   }
 
-  const inviteQuery = await db.collectionGroup('inviteCodes').where('__name__', '==', code).limit(1).get();
+  const inviteQuery = await db
+    .collectionGroup('inviteCodes')
+    .where(FieldPath.documentId(), '==', code)
+    .limit(1)
+    .get();
+
   if (inviteQuery.empty) throw new HttpsError('not-found', 'Invite code not found');
 
   const inviteRef = inviteQuery.docs[0].ref;
   const schoolRef = inviteRef.parent.parent;
   if (!schoolRef) throw new HttpsError('internal', 'Invalid invite path');
-
   const schoolId = schoolRef.id;
-  let alreadyMember = false;
-  let assignedClassId = '';
 
-  await db.runTransaction(async (tx) => {
-    const inviteSnap = await tx.get(inviteRef);
+  // Bloqueo multi-colegio (una cuenta = un colegio). Si ya existe en otro colegio, rechazamos.
+  const membershipsSnap = await db
+    .collectionGroup('users')
+    .where(FieldPath.documentId(), '==', uid)
+    .limit(10)
+    .get();
+
+  const foreignMembership = membershipsSnap.docs.find((doc) => doc.ref.parent.parent?.id !== schoolId);
+  if (foreignMembership) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Esta cuenta ya pertenece a otro colegio. Usa otra cuenta o soporte para migración.',
+    );
+  }
+
+  const userRef = schoolRef.collection('users').doc(uid);
+
+  const result = await db.runTransaction(async (tx) => {
+    const [inviteSnap, userSnap] = await Promise.all([tx.get(inviteRef), tx.get(userRef)]);
+
     const invite = inviteSnap.data();
     if (!invite) throw new HttpsError('not-found', 'Invite code not found');
 
-    const userMembershipsSnap = await tx.get(
-      db.collectionGroup('users').where('__name__', '==', uid).limit(10),
-    );
+    const classId = requestedClassId || String(invite.classId || '').trim();
+    const newChild = {name: childName, age: childAge, classId};
 
-    const memberships = userMembershipsSnap.docs.map((doc) => doc.ref.parent.parent?.id).filter(Boolean);
-    const otherSchoolMembership = memberships.find((memberSchoolId) => memberSchoolId !== schoolId);
-    if (otherSchoolMembership) {
-      throw new HttpsError(
-        'failed-precondition',
-        'This account is already linked to another school. Use a different account or contact support.',
-      );
-    }
+    const userExists = userSnap.exists;
+    const existingUser = userSnap.data() || {};
 
-    const userRef = schoolRef.collection('users').doc(uid);
-    const userSnap = await tx.get(userRef);
-    const userData = userSnap.data() || {};
-    alreadyMember = userSnap.exists;
-
-    const classId = requestedClassId || cleanString(invite.classId);
-    assignedClassId = classId;
-
-    if (!alreadyMember) {
+    if (!userExists) {
       const uses = Number(invite.uses || 0);
       const maxUses = Number(invite.maxUses || 0);
       const expiresAt = invite.expiresAt?.toDate?.();
-
       if (maxUses > 0 && uses >= maxUses) {
         throw new HttpsError('failed-precondition', 'Invite exhausted');
       }
       if (expiresAt && expiresAt.getTime() < Date.now()) {
         throw new HttpsError('failed-precondition', 'Invite expired');
       }
-
       tx.update(inviteRef, {uses: FieldValue.increment(1)});
     }
 
-    const children = mergeChildren(userData.children, {
-      name: childName,
-      age: childAge,
-      classId,
-    });
-    const classIds = mergeClassIds(userData.classIds, classId);
+    const existingClassIds = Array.isArray(existingUser.classIds)
+      ? existingUser.classIds.map((v) => String(v)).filter(Boolean)
+      : [];
+    const mergedClassIds = classId
+      ? Array.from(new Set([...existingClassIds, classId]))
+      : existingClassIds;
+    const mergedChildren = mergeChildren(existingUser.children, newChild);
 
-    const payload = {
-      displayName: pickDisplayName(request),
-      role: cleanString(userData.role) || 'parent',
-      children,
-      classIds,
-      lastActiveAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
+    tx.set(
+      userRef,
+      {
+        displayName:
+          String(existingUser.displayName || '').trim() ||
+          request.auth.token.name ||
+          request.auth.token.email ||
+          'Familia',
+        role: String(existingUser.role || 'parent'),
+        children: mergedChildren,
+        classIds: mergedClassIds,
+        photoUrl: existingUser.photoUrl || null,
+        createdAt: existingUser.createdAt || FieldValue.serverTimestamp(),
+        lastActiveAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
 
-    if (!userSnap.exists) {
-      payload.createdAt = FieldValue.serverTimestamp();
-    }
-
-    tx.set(userRef, payload, {merge: true});
+    return {ok: true, schoolId, alreadyMember: userExists};
   });
 
-  return {
-    ok: true,
-    schoolId,
-    classId: assignedClassId,
-    alreadyMember,
-  };
+  return result;
 });
 
 exports.getOrCreateChat = onCall(async (request) => {
   const uid = assertAuth(request);
-  const schoolId = cleanString(request.data?.schoolId);
-  const peerUid = cleanString(request.data?.peerUid);
+  const schoolId = String(request.data?.schoolId || '').trim();
+  const peerUid = String(request.data?.peerUid || '').trim();
 
   if (!schoolId || !peerUid) {
     throw new HttpsError('invalid-argument', 'schoolId and peerUid are required');
   }
   if (peerUid === uid) {
-    throw new HttpsError('invalid-argument', 'You cannot chat with yourself');
+    throw new HttpsError('invalid-argument', 'Cannot create a chat with yourself');
   }
 
-  const [a, b] = [uid, peerUid].sort();
-  const chatId = `${a}_${b}`;
-  const schoolRef = db.collection('schools').doc(schoolId);
-  const meRef = schoolRef.collection('users').doc(uid);
-  const peerRef = schoolRef.collection('users').doc(peerUid);
-  const chatRef = schoolRef.collection('chats').doc(chatId);
+  const meRef = db.doc(`schools/${schoolId}/users/${uid}`);
+  const peerRef = db.doc(`schools/${schoolId}/users/${peerUid}`);
+  const [meSnap, peerSnap] = await Promise.all([meRef.get(), peerRef.get()]);
+
+  if (!meSnap.exists || !peerSnap.exists) {
+    throw new HttpsError('permission-denied', 'Both users must belong to the same school');
+  }
+
+  const participants = [uid, peerUid].sort();
+  const chatId = `${participants[0]}_${participants[1]}`;
+  const chatRef = db.doc(`schools/${schoolId}/chats/${chatId}`);
 
   await db.runTransaction(async (tx) => {
-    const [meSnap, peerSnap, chatSnap] = await Promise.all([
-      tx.get(meRef),
-      tx.get(peerRef),
-      tx.get(chatRef),
-    ]);
-
-    if (!meSnap.exists) {
-      throw new HttpsError('permission-denied', 'You are not a member of this school');
-    }
-    if (!peerSnap.exists) {
-      throw new HttpsError('not-found', 'Peer user not found in this school');
-    }
-
+    const chatSnap = await tx.get(chatRef);
     if (!chatSnap.exists) {
       tx.set(chatRef, {
-        participants: [a, b],
+        participants,
         createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
         lastMessage: '',
-        lastMessageAt: null,
+        lastMessageAt: FieldValue.serverTimestamp(),
       });
     }
   });

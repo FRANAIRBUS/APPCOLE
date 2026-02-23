@@ -17,42 +17,36 @@ import '../features/profile/profile_screen.dart';
 import '../features/talento/talento_screen.dart';
 import '../features/veteranos/veteranos_screen.dart';
 
+export '../features/auth/session_provider.dart'
+    show authServiceProvider, authStateProvider, schoolIdProvider, sessionStateProvider, SessionPhase, SessionState;
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final sessionAsync = ref.watch(sessionStateProvider);
 
   return GoRouter(
     initialLocation: '/splash',
     redirect: (context, state) {
-      final path = state.matchedLocation;
-      final onSplash = path == '/splash';
-      final onLogin = path == '/login';
-      final onInvite = path == '/invite';
+      final location = state.matchedLocation;
+      final onLogin = location == '/login';
+      final onInvite = location == '/invite';
+      final onSplash = location == '/splash';
 
-      if (sessionAsync.isLoading) {
-        return onSplash ? null : '/splash';
-      }
+      if (sessionAsync.isLoading) return onSplash ? null : '/splash';
+      if (sessionAsync.hasError) return onSplash ? null : '/splash';
 
-      if (sessionAsync.hasError) {
-        return onLogin ? null : '/login';
-      }
-
-      final session = sessionAsync.valueOrNull;
-      if (session == null) {
-        return onSplash ? null : '/splash';
-      }
-
-      switch (session.status) {
-        case SessionStatus.unauthenticated:
+      final session = sessionAsync.value!;
+      switch (session.phase) {
+        case SessionPhase.unauthenticated:
           return onLogin ? null : '/login';
-        case SessionStatus.needsInvite:
+        case SessionPhase.needsInvite:
           return onInvite ? null : '/invite';
-        case SessionStatus.ready:
+        case SessionPhase.ready:
           if (onLogin || onInvite || onSplash) return '/posts';
           return null;
       }
     },
     routes: [
-      GoRoute(path: '/splash', builder: (_, __) => const _SplashScreen()),
+      GoRoute(path: '/splash', builder: (_, __) => const _RouterSplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/invite', builder: (_, __) => const InviteScreen()),
       StatefulShellRoute.indexedStack(
@@ -74,8 +68,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
+class _RouterSplashScreen extends StatelessWidget {
+  const _RouterSplashScreen();
 
   @override
   Widget build(BuildContext context) {

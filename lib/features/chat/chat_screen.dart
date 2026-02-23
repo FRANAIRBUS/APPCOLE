@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../auth/session_provider.dart';
+import '../../router/app_router.dart';
 import '../../services/chat_service.dart';
 
 final chatServiceProvider = Provider<ChatService>((ref) => ChatService(FirebaseFunctions.instance));
@@ -17,291 +17,286 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-  final _messageCtrl = TextEditingController();
-
+  final _peerUidCtrl = TextEditingController();
+  final _msgCtrl = TextEditingController();
+  bool _creatingChat = false;
+  bool _sending = false;
   String? _selectedChatId;
-  String? _selectedPeerUid;
-  String? _selectedPeerName;
-  String? _error;
-  bool _openingChat = false;
-  bool _sendingMessage = false;
 
   @override
   void dispose() {
-    _messageCtrl.dispose();
+    _peerUidCtrl.dispose();
+    _msgCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _openChat({required String schoolId, required String peerUid, required String peerName}) async {
-    setState(() {
-      _openingChat = true;
-      _error = null;
-    });
+  Future<void> _startChat(String schoolId) async {
+    final peerUid = _peerUidCtrl.text.trim();
+    if (peerUid.isEmpty) return;
 
+    setState(() => _creatingChat = true);
     try {
       final chatId = await ref.read(chatServiceProvider).getOrCreateChat(
             schoolId: schoolId,
             peerUid: peerUid,
           );
       if (!mounted) return;
-      setState(() {
-        _selectedChatId = chatId;
-        _selectedPeerUid = peerUid;
-        _selectedPeerName = peerName;
-      });
+      setState(() => _selectedChatId = chatId);
+      _peerUidCtrl.clear();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir el chat: $e')),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _openingChat = false);
-      }
+      if (mounted) setState(() => _creatingChat = false);
     }
   }
 
-  Future<void> _sendMessage({required String schoolId, required String uid}) async {
-    final chatId = _selectedChatId;
-    final text = _messageCtrl.text.trim();
-    if (chatId == null || text.isEmpty) return;
+  Future<void> _sendMessage({required String schoolId, required String chatId, required String uid}) async {
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty) return;
 
-    setState(() {
-      _sendingMessage = true;
-      _error = null;
-    });
-
+    setState(() => _sending = true);
     try {
-      final firestore = FirebaseFirestore.instance;
-      final chatRef = firestore.doc('schools/$schoolId/chats/$chatId');
-      final msgRef = firestore.collection('schools/$schoolId/chats/$chatId/messages').doc();
-      final batch = firestore.batch();
-
-      batch.set(msgRef, {
+      final chatRef = FirebaseFirestore.instance.doc('schools/$schoolId/chats/$chatId');
+      await chatRef.collection('messages').add({
         'senderUid': uid,
         'text': text,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      batch.update(chatRef, {
+      await chatRef.update({
         'lastMessage': text,
         'lastMessageAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       });
-
-      await batch.commit();
-      _messageCtrl.clear();
+      _msgCtrl.clear();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo enviar: $e')),
+      );
     } finally {
-      if (mounted) {
-        setState(() => _sendingMessage = false);
-      }
+      if (mounted) setState(() => _sending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final uid = currentUser?.uid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
 
     if (schoolId == null || uid == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final peersStream = FirebaseFirestore.instance
-        .collection('schools/$schoolId/users')
-        .orderBy('displayName')
-        .limit(100)
+    final chatsStream = FirebaseFirestore.instance
+        .collection('schools/$schoolId/chats')
+        .where('participants', arrayContains: uid)
         .snapshots();
 
-    final messagesStream = _selectedChatId == null
-        ? null
-        : FirebaseFirestore.instance
-            .collection('schools/$schoolId/chats/${_selectedChatId!}/messages')
-            .orderBy('createdAt')
-            .limit(200)
-            .snapshots();
-
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('Chat interno', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          const Text('Sin teléfonos visibles. Solo familias del mismo colegio.'),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 180,
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: peersStream,
-              builder: (context, snapshot) {
-                final peers = (snapshot.data?.docs ?? const [])
-                    .where((doc) => doc.id != uid)
-                    .toList();
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (peers.isEmpty) {
-                  return const Card(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Text('No hay otras familias disponibles todavía.'),
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: peers.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final peer = peers[index];
-                    final data = peer.data();
-                    final peerName = (data['displayName'] as String?)?.trim();
-                    final classes = ((data['classIds'] as List?) ?? const []).cast<dynamic>().join(', ');
-                    final isSelected = _selectedPeerUid == peer.id;
-
-                    return SizedBox(
-                      width: 260,
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                peerName == null || peerName.isEmpty ? 'Familia' : peerName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                classes.isEmpty ? 'Sin clase visible' : 'Clases: $classes',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const Spacer(),
-                              FilledButton.icon(
-                                onPressed: _openingChat
-                                    ? null
-                                    : () => _openChat(
-                                          schoolId: schoolId,
-                                          peerUid: peer.id,
-                                          peerName: peerName == null || peerName.isEmpty ? 'Familia' : peerName,
-                                        ),
-                                icon: _openingChat && isSelected
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : const Icon(Icons.chat_bubble_outline),
-                                label: Text(isSelected ? 'Abierto' : 'Abrir chat'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _peerUidCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'UID de la otra familia',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _creatingChat ? null : () => _startChat(schoolId),
+                child: Text(_creatingChat ? '...' : 'Abrir chat'),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: _selectedChatId == null || messagesStream == null
-                    ? const Center(child: Text('Selecciona una familia para iniciar el chat.'))
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Conversación con ${_selectedPeerName ?? 'Familia'}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                              stream: messagesStream,
-                              builder: (context, snapshot) {
-                                final docs = snapshot.data?.docs ?? const [];
-                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return const Center(child: CircularProgressIndicator());
-                                }
-                                if (docs.isEmpty) {
-                                  return const Center(child: Text('No hay mensajes aún.'));
-                                }
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Card(
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: chatsStream,
+                      builder: (context, snapshot) {
+                        final docs = [...(snapshot.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[])];
+                        docs.sort((a, b) {
+                          final aTs = a.data()['lastMessageAt'];
+                          final bTs = b.data()['lastMessageAt'];
+                          final aMs = aTs is Timestamp ? aTs.millisecondsSinceEpoch : 0;
+                          final bMs = bTs is Timestamp ? bTs.millisecondsSinceEpoch : 0;
+                          return bMs.compareTo(aMs);
+                        });
 
-                                return ListView.builder(
-                                  itemCount: docs.length,
-                                  itemBuilder: (context, index) {
-                                    final data = docs[index].data();
-                                    final isMine = data['senderUid'] == uid;
-                                    final text = (data['text'] as String?) ?? '';
-                                    return Align(
-                                      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(maxWidth: 340),
-                                        child: Card(
-                                          margin: const EdgeInsets.symmetric(vertical: 4),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10),
-                                            child: Text(text),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
+                        if (docs.isEmpty) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Text('Aún no tienes chats. Abre uno usando el UID de otra familia.'),
+                            ),
+                          );
+                        }
+
+                        return ListView.separated(
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final data = docs[index].data();
+                            final participants = (data['participants'] as List?)?.cast<String>() ?? const [];
+                            final peer = participants.where((p) => p != uid).join(', ');
+                            final isSelected = docs[index].id == _selectedChatId;
+
+                            return ListTile(
+                              selected: isSelected,
+                              title: Text(peer.isEmpty ? 'Chat' : peer),
+                              subtitle: Text(
+                                (data['lastMessage'] as String?)?.trim().isNotEmpty == true
+                                    ? data['lastMessage'] as String
+                                    : 'Sin mensajes',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => setState(() => _selectedChatId = docs[index].id),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 6,
+                  child: Card(
+                    child: _selectedChatId == null
+                        ? const Center(child: Text('Selecciona un chat para ver mensajes'))
+                        : _MessagesPanel(
+                            schoolId: schoolId,
+                            chatId: _selectedChatId!,
+                            currentUid: uid,
+                            messageController: _msgCtrl,
+                            sending: _sending,
+                            onSend: () => _sendMessage(
+                              schoolId: schoolId,
+                              chatId: _selectedChatId!,
+                              uid: uid,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _messageCtrl,
-                                  maxLines: 3,
-                                  minLines: 1,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Escribe un mensaje…',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton(
-                                onPressed: _sendingMessage ? null : () => _sendMessage(schoolId: schoolId, uid: uid),
-                                child: _sendingMessage
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : const Text('Enviar'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-              ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MessagesPanel extends StatelessWidget {
+  const _MessagesPanel({
+    required this.schoolId,
+    required this.chatId,
+    required this.currentUid,
+    required this.messageController,
+    required this.sending,
+    required this.onSend,
+  });
+
+  final String schoolId;
+  final String chatId;
+  final String currentUid;
+  final TextEditingController messageController;
+  final bool sending;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('schools/$schoolId/chats/$chatId/messages')
+        .orderBy('createdAt')
+        .limit(100)
+        .snapshots();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Chat: $chatId', style: Theme.of(context).textTheme.titleSmall),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: stream,
+            builder: (context, snapshot) {
+              final docs = snapshot.data?.docs ?? const [];
+              if (docs.isEmpty) {
+                return const Center(child: Text('Sin mensajes todavía'));
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final data = docs[index].data();
+                  final mine = data['senderUid'] == currentUid;
+                  final text = data['text'] as String? ?? '';
+
+                  return Align(
+                    alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Text(text),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: messageController,
+                  minLines: 1,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Escribe un mensaje',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => onSend(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: sending ? null : onSend,
+                child: Text(sending ? '...' : 'Enviar'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
