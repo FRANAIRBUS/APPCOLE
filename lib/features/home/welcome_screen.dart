@@ -10,31 +10,33 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 980;
-            final padding = wide
-                ? const EdgeInsets.symmetric(horizontal: 48, vertical: 28)
-                : const EdgeInsets.all(20);
+        child: SingleChildScrollView(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 980;
+              final padding = wide
+                  ? const EdgeInsets.symmetric(horizontal: 48, vertical: 28)
+                  : const EdgeInsets.all(20);
 
-            final content = _WelcomeContent(
-              onLogin: () => context.go('/login'),
-            );
+              final content = _WelcomeContent(
+                onLogin: () => context.go('/login'),
+              );
 
-            if (!wide) return Padding(padding: padding, child: content);
+              if (!wide) return Padding(padding: padding, child: content);
 
-            return Padding(
-              padding: padding,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Expanded(flex: 6, child: _HeroPanel()),
-                  const SizedBox(width: 36),
-                  Expanded(flex: 5, child: content),
-                ],
-              ),
-            );
-          },
+              return Padding(
+                padding: padding,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(flex: 6, child: _HeroPanel()),
+                    const SizedBox(width: 36),
+                    Expanded(flex: 5, child: content),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -195,10 +197,9 @@ class _WelcomeContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         if (MediaQuery.of(context).size.width < 980) ...[
           Row(
             children: [
@@ -318,7 +319,6 @@ class _WelcomeContent extends StatelessWidget {
               ?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
-      ),
     );
   }
 }
