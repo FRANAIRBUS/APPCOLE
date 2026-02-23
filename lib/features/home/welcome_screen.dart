@@ -58,7 +58,16 @@ class _HeroPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.school_outlined, size: 28, color: cs.onPrimaryContainer),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'image/logo.png',
+                  width: 32,
+                  height: 32,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.school_outlined, size: 28, color: cs.onPrimaryContainer),
+                ),
+              ),
               const SizedBox(width: 10),
               Text(
                 'ColeConecta',
@@ -191,7 +200,16 @@ class _WelcomeContent extends StatelessWidget {
         if (MediaQuery.of(context).size.width < 980) ...[
           Row(
             children: [
-              Icon(Icons.school_outlined, color: cs.primary),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  'image/logo.png',
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.school_outlined, color: cs.primary),
+                ),
+              ),
               const SizedBox(width: 8),
               Text('ColeConecta', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
             ],

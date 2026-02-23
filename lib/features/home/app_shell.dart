@@ -27,7 +27,29 @@ class AppShell extends StatelessWidget {
     final current = navigationShell.currentIndex.clamp(0, _titles.length - 1);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[current]),
+        titleSpacing: 8,
+        title: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'image/logo.png',
+                width: 28,
+                height: 28,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Icon(Icons.school_outlined),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _titles[current],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24),
           child: Align(

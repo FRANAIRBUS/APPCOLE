@@ -68,10 +68,8 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
 
     final posts = FirebaseFirestore.instance
         .collection('schools/$schoolId/posts')
-        .where('module', isEqualTo: 'busco_ofrezco')
-        .where('status', isEqualTo: 'active')
         .orderBy('createdAt', descending: true)
-        .limit(30)
+        .limit(120)
         .snapshots();
 
     return ListView(
@@ -109,10 +107,15 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
           stream: posts,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
+              final message = snapshot.error.toString();
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
-                  child: Text('No se pudieron cargar publicaciones: ${snapshot.error}'),
+                  child: Text(
+                    message.contains('failed-precondition')
+                        ? 'No se pudieron cargar publicaciones por configuración de consulta. Ya se aplicó un fallback; recarga la página.'
+                        : 'No se pudieron cargar publicaciones: $message',
+                  ),
                 ),
               );
             }
@@ -123,7 +126,10 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
               );
             }
 
-            final docs = snapshot.data?.docs ?? const [];
+            final docs = (snapshot.data?.docs ?? const []).where((doc) {
+              final data = doc.data();
+              return data['module'] == 'busco_ofrezco' && data['status'] == 'active';
+            }).toList();
             if (docs.isEmpty) {
               return const Card(
                 child: Padding(

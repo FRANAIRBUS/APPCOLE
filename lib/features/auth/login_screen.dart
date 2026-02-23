@@ -106,19 +106,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(_isRegister ? 'Crear cuenta' : 'Acceder', style: theme.textTheme.headlineSmall),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+              theme.colorScheme.surface,
+            ],
+          ),
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset(
+                              'image/logo.png',
+                              width: 34,
+                              height: 34,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.school_outlined, size: 32),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _isRegister ? 'Crear cuenta' : 'Acceder',
+                              style: theme.textTheme.headlineSmall,
+                            ),
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _email,
@@ -171,11 +202,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           : () => _socialSignIn(() => ref.read(authServiceProvider).signInWithApple()),
                       child: const Text('Continuar con Apple'),
                     ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                      if (_error != null) ...[
+                        const SizedBox(height: 8),
+                        Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

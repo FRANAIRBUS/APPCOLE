@@ -63,9 +63,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
     final stream = FirebaseFirestore.instance
         .collection('schools/$schoolId/events')
-        .where('status', isEqualTo: 'active')
         .orderBy('dateTime')
-        .limit(30)
+        .limit(120)
         .snapshots();
 
     return ListView(
@@ -91,10 +90,15 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           stream: stream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
+              final message = snapshot.error.toString();
               return Card(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
-                  child: Text('No se pudieron cargar eventos: ${snapshot.error}'),
+                  child: Text(
+                    message.contains('failed-precondition')
+                        ? 'No se pudieron cargar eventos por configuración de consulta. Ya se aplicó un fallback; recarga la página.'
+                        : 'No se pudieron cargar eventos: $message',
+                  ),
                 ),
               );
             }
@@ -105,7 +109,10 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               );
             }
 
-            final docs = snapshot.data?.docs ?? const [];
+            final docs = (snapshot.data?.docs ?? const []).where((doc) {
+              final data = doc.data();
+              return data['status'] == 'active';
+            }).toList();
             if (docs.isEmpty) {
               return const Card(
                 child: Padding(
