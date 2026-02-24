@@ -32,9 +32,9 @@ service cloud.firestore {
     function isSafeSelfUserUpdate() {
       // Solo permitir cambiar un subconjunto pequeño de claves.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(userSelfWritableKeys())
-        // Inmutables
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.createdAt == resource.data.createdAt;
+        // Inmutables - si existen en los datos originales, no pueden cambiar
+        && (resource.data.role == null || request.resource.data.role == resource.data.role)
+        && (resource.data.createdAt == null || request.resource.data.createdAt == resource.data.createdAt);
     }
     function isChatParticipant(schoolId, chatId) {
       return inSchool(schoolId)
