@@ -9,14 +9,37 @@ final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore
 final authServiceProvider = Provider<AuthService>((ref) => AuthService(ref.read(firebaseAuthProvider)));
 final authStateProvider = StreamProvider<User?>((ref) => ref.read(authServiceProvider).authStateChanges());
 
+Future<String?> _resolveLegacySchoolId(FirebaseFirestore firestore, String uid) async {
+  final schoolsSnap = await firestore.collection('schools').get();
+  if (schoolsSnap.docs.isEmpty) return null;
+
+  final checks = await Future.wait(
+    schoolsSnap.docs.map((schoolDoc) async {
+      final userDoc = await schoolDoc.reference.collection('users').doc(uid).get();
+      if (!userDoc.exists) return (schoolId: null as String?, lastActiveMs: 0);
+
+      final ts = userDoc.data()?['lastActiveAt'];
+      final ms = ts is Timestamp ? ts.millisecondsSinceEpoch : 0;
+      return (schoolId: schoolDoc.id, lastActiveMs: ms);
+    }),
+  );
+
+  checks.sort((a, b) => b.lastActiveMs.compareTo(a.lastActiveMs));
+  final match = checks.firstWhere(
+    (entry) => entry.schoolId != null,
+    orElse: () => (schoolId: null, lastActiveMs: 0),
+  );
+  return match.schoolId;
+}
+
 Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, String uid) async* {
   await for (final userSnap in firestore.collection('users').doc(uid).snapshots()) {
     final schoolId = (userSnap.data()?['schoolId'] as String?)?.trim();
-    if (schoolId == null || schoolId.isEmpty) {
-      yield null;
+    if (schoolId != null && schoolId.isNotEmpty) {
+      yield schoolId;
       continue;
     }
-    yield schoolId;
+    yield await _resolveLegacySchoolId(firestore, uid);
   }
 }
 

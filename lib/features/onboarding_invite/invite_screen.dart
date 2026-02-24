@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/school.dart';
+import '../auth/session_provider.dart';
 import '../schools/schools_providers.dart';
 
 class InviteScreen extends ConsumerStatefulWidget {
@@ -208,7 +209,20 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     final canContinue = _selectedSchool != null && !_saving;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Selecciona tu colegio')),
+      appBar: AppBar(
+        title: const Text('Selecciona tu colegio'),
+        actions: [
+          IconButton(
+            tooltip: 'Cerrar sesión',
+            onPressed: _saving
+                ? null
+                : () async {
+                    await ref.read(authServiceProvider).signOut();
+                  },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),

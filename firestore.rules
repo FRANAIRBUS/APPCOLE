@@ -93,6 +93,19 @@ service cloud.firestore {
       ];
     }
 
+    function globalUserOnboardingInitKeys() {
+      return [
+        'displayName',
+        'photoUrl',
+        'updatedAt',
+        'lastActiveAt',
+        'schoolId',
+        'schoolName',
+        'schoolLocalidad',
+        'schoolProvincia',
+      ];
+    }
+
     function schoolSnapshotMatchesCatalog() {
       return request.resource.data.schoolId is string
         && request.resource.data.schoolId.size() > 0
@@ -123,11 +136,24 @@ service cloud.firestore {
 
     function validGlobalUserUpdate(uid) {
       return isOwner(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(globalUserUpdateKeys())
-        && request.resource.data.schoolId == resource.data.schoolId
-        && request.resource.data.schoolName == resource.data.schoolName
-        && request.resource.data.schoolLocalidad == resource.data.schoolLocalidad
-        && request.resource.data.schoolProvincia == resource.data.schoolProvincia
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(globalUserUpdateKeys())
+            && request.resource.data.schoolId == resource.data.schoolId
+            && request.resource.data.schoolName == resource.data.schoolName
+            && request.resource.data.schoolLocalidad == resource.data.schoolLocalidad
+            && request.resource.data.schoolProvincia == resource.data.schoolProvincia
+          )
+          ||
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(globalUserOnboardingInitKeys())
+            && resource.data.schoolId == null
+            && resource.data.schoolName == null
+            && resource.data.schoolLocalidad == null
+            && resource.data.schoolProvincia == null
+            && schoolSnapshotMatchesCatalog()
+          )
+        )
         && (request.resource.data.displayName == null || request.resource.data.displayName is string)
         && (request.resource.data.photoUrl == null || request.resource.data.photoUrl is string)
         && (request.resource.data.lastActiveAt == null || request.resource.data.lastActiveAt is timestamp)
