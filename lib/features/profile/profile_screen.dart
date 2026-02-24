@@ -7,6 +7,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/session_provider.dart';
 import '../../services/invite_share_service.dart';
 
+const List<String> _classOptions = [
+  'Hasta 2 Años',
+  'K1',
+  'K2',
+  'K3',
+  '1P',
+  '2P',
+  '3P',
+  '4P',
+  '5P',
+  '6P',
+  '1S',
+  '2S',
+  '3S',
+  '4S',
+  '1B',
+  '2B',
+  'Otros',
+];
+
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -330,7 +350,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                         .map(
                           (child) => _EditableChild(
                             name: child.name.text.trim(),
-                            classId: child.classId.text.trim(),
+                            classId: child.classId.trim(),
                           ),
                         )
                         .where((child) => child.name.isNotEmpty || child.classId.isNotEmpty)
@@ -384,21 +404,30 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 decoration: InputDecoration(labelText: 'Nombre del alumno ${index + 1}'),
                 validator: (value) {
                   final name = (value ?? '').trim();
-                  final classValue = child.classId.text.trim();
+                  final classValue = child.classId.trim();
                   if (name.isEmpty && classValue.isEmpty) return null;
                   if (name.length < 2) return 'Nombre demasiado corto.';
                   return null;
                 },
               ),
               const SizedBox(height: 8),
-              TextFormField(
-                controller: child.classId,
+              DropdownButtonFormField<String>(
+                initialValue: child.classId.isEmpty ? null : child.classId,
                 decoration: const InputDecoration(labelText: 'Curso / clase'),
+                items: _classOptions
+                    .map(
+                      (classId) => DropdownMenuItem<String>(
+                        value: classId,
+                        child: Text(classId),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => child.classId = value ?? ''),
                 validator: (value) {
                   final classValue = (value ?? '').trim();
                   final name = child.name.text.trim();
                   if (name.isEmpty && classValue.isEmpty) return null;
-                  if (classValue.length < 2) return 'Introduce el curso.';
+                  if (classValue.isEmpty) return 'Selecciona el curso.';
                   return null;
                 },
               ),
@@ -457,14 +486,13 @@ class _EditableChild {
 class _ChildControllers {
   _ChildControllers({required String name, required String classId})
       : name = TextEditingController(text: name),
-        classId = TextEditingController(text: classId);
+        classId = _classOptions.contains(classId) ? classId : (classId.isEmpty ? '' : 'Otros');
 
   final TextEditingController name;
-  final TextEditingController classId;
+  String classId;
 
   void dispose() {
     name.dispose();
-    classId.dispose();
   }
 }
 
