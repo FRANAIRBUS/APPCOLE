@@ -28,19 +28,23 @@ class MatchingScreen extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final myClassIds = (meSnapshot.data?.data()?['classIds'] as List?)?.cast<String>() ?? const [];
-        if (myClassIds.isEmpty) {
+        final meData = meSnapshot.data?.data() ?? const <String, dynamic>{};
+        final myClassIds = (meData['classIds'] as List?)?.map((e) => e.toString()).toList() ?? const [];
+        final myExtraGroupIds = (meData['extraGroupIds'] as List?)?.map((e) => e.toString()).toList() ?? const [];
+        final myMatchIds = [...{...myClassIds, ...myExtraGroupIds}].where((id) => id.trim().isNotEmpty).toList();
+
+        if (myMatchIds.isEmpty) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Aún no tienes clases asignadas. Pide al colegio que complete tu perfil.'),
+              child: Text('Aún no tienes clases o grupos asignados. Completa tu perfil para usar Mi Clase.'),
             ),
           );
         }
 
         final peersQuery = FirebaseFirestore.instance
             .collection('schools/$schoolId/users')
-            .where('classIds', arrayContainsAny: myClassIds)
+            .where('classIds', arrayContainsAny: myMatchIds.take(30).toList())
             .limit(50)
             .snapshots();
 
@@ -57,8 +61,10 @@ class MatchingScreen extends ConsumerWidget {
             final peers = snapshot.data?.docs.where((d) => d.id != uid).toList() ?? [];
             peers.sort((a, b) {
               int overlap(Map<String, dynamic> data) {
-                final classIds = (data['classIds'] as List?)?.cast<String>() ?? const [];
-                return classIds.where(myClassIds.contains).length;
+                final classIds = (data['classIds'] as List?)?.map((e) => e.toString()).toList() ?? const [];
+                final extraGroupIds = (data['extraGroupIds'] as List?)?.map((e) => e.toString()).toList() ?? const [];
+                final matchIds = [...{...classIds, ...extraGroupIds}];
+                return matchIds.where(myMatchIds.contains).length;
               }
 
               return overlap(b.data()).compareTo(overlap(a.data()));
@@ -82,7 +88,7 @@ class MatchingScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Encuentra familias con aulas en común y abre chat directo.',
+                  'Encuentra familias con clases o grupos en común y abre chat directo.',
                   style: Theme.of(context)
                       .textTheme
                       .bodyMedium
@@ -100,8 +106,12 @@ class MatchingScreen extends ConsumerWidget {
                           ),
                         ),
                         title: Text(peer.data()['displayName'] ?? 'Familia'),
-                        subtitle:
-                            Text('Clases en común: ${((peer.data()['classIds'] as List?) ?? []).where(myClassIds.contains).length}'),
+                        subtitle: Text(
+                          'Coincidencias: ${([
+                            ...(((peer.data()['classIds'] as List?) ?? const []).map((e) => e.toString())),
+                            ...(((peer.data()['extraGroupIds'] as List?) ?? const []).map((e) => e.toString())),
+                          ]).where(myMatchIds.contains).toSet().length}',
+                        ),
                         trailing: OutlinedButton(
                           onPressed: () async {
                             try {
