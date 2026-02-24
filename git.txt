@@ -13,10 +13,14 @@ git fetch origin
 git status
 git pull --rebase origin main
 
+flutter analyze
 
 flutter build web --release
 
 firebase deploy --only hosting
+
+firebase deploy --only firestore:rules
+
 
 Ejecuta scripts/ci_local.sh
 
