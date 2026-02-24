@@ -55,8 +55,8 @@ class AppShell extends StatelessWidget {
         onDestinationSelected: (index) => navigationShell.goBranch(index),
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.swap_horiz), label: 'Busco/Ofrezco'),
-          NavigationDestination(icon: Icon(Icons.event), label: 'Entre Padres'),
+              icon: Icon(Icons.swap_horiz), label: 'Busco'),
+          NavigationDestination(icon: Icon(Icons.event), label: 'Padres'),
           NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
           NavigationDestination(
               icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
