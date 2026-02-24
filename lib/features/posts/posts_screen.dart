@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
+import '../../services/chat_service.dart';
 
 class PostsScreen extends ConsumerStatefulWidget {
   const PostsScreen({super.key});
@@ -169,6 +170,8 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
                 final title = (data['title'] as String? ?? '').trim();
                 final body = (data['body'] as String? ?? '').trim();
                 final createdAt = data['createdAt'] as Timestamp?;
+                final authorUid = (data['authorUid'] as String? ?? '').trim();
+                final canContact = authorUid.isNotEmpty && authorUid != FirebaseAuth.instance.currentUser?.uid;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 10),
@@ -198,6 +201,52 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
                         Text(
                           body.isEmpty ? 'Sin descripción' : body,
                           style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: OutlinedButton.icon(
+                            onPressed: canContact
+                                ? () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Solicitar conversación'),
+                                        content: const Text(
+                                          'Se abrirá un chat 1:1 con el anunciante para continuar por privado.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(false),
+                                            child: const Text('Cancelar'),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () => Navigator.of(context).pop(true),
+                                            child: const Text('Iniciar chat'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirm != true) return;
+                                    try {
+                                      final chatId = await ref.read(chatServiceProvider).getOrCreateChat(
+                                            schoolId: schoolId,
+                                            peerUid: authorUid,
+                                          );
+                                      if (!context.mounted) return;
+                                      context.push('/chat/$chatId');
+                                    } catch (e) {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('No se pudo abrir el chat: $e')),
+                                      );
+                                    }
+                                  }
+                                : null,
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text('Contactar anunciante'),
+                          ),
                         ),
                       ],
                     ),

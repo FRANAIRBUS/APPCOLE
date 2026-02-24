@@ -201,18 +201,6 @@ class _WelcomeContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (MediaQuery.of(context).size.width < 980) ...[
-          Row(
-            children: [
-              const AppLogo(width: 140, height: 44, borderRadius: 10),
-              const SizedBox(width: 8),
-              Text('ColeConecta',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 12),
           Text(
             'Red privada de familias por colegio.',
             style: Theme.of(context)
