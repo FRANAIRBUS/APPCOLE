@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/session_provider.dart';
+import '../../services/invite_share_service.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -94,6 +95,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+
+  Future<void> _shareInviteCard(String schoolId) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(inviteShareServiceProvider).shareInviteCard(
+            schoolId: schoolId,
+            source: 'profile',
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tarjeta copiada. Compártela por WhatsApp o email.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir la invitación: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _signOut() async {
     setState(() => _busy = true);
@@ -186,6 +208,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onPressed: (_busy || schoolId == null || uid.isEmpty) ? null : () => _editProfile(schoolId, uid),
           icon: const Icon(Icons.edit_outlined),
           label: const Text('Editar perfil y alumnos'),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: (_busy || schoolId == null) ? null : () => _shareInviteCard(schoolId),
+          icon: const Icon(Icons.share_outlined),
+          label: const Text('Invitar a padres al colegio'),
         ),
         const SizedBox(height: 8),
         FilledButton.icon(

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
 import '../../services/chat_service.dart';
+import '../../services/invite_share_service.dart';
 
 class MatchingScreen extends ConsumerWidget {
   const MatchingScreen({super.key});
@@ -17,6 +18,24 @@ class MatchingScreen extends ConsumerWidget {
     if (schoolId == null || uid == null) return const Center(child: CircularProgressIndicator());
 
     final meDoc = FirebaseFirestore.instance.doc('schools/$schoolId/users/$uid').snapshots();
+
+    Future<void> shareInviteCard() async {
+      try {
+        await ref.read(inviteShareServiceProvider).shareInviteCard(
+              schoolId: schoolId,
+              source: 'matching',
+            );
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tarjeta copiada. Compártela por WhatsApp o email.')),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo compartir la invitación: $e')),
+        );
+      }
+    }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: meDoc,
@@ -34,11 +53,28 @@ class MatchingScreen extends ConsumerWidget {
         final myMatchIds = [...{...myClassIds, ...myExtraGroupIds}].where((id) => id.trim().isNotEmpty).toList();
 
         if (myMatchIds.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Aún no tienes clases o grupos asignados. Completa tu perfil para usar Mi Clase.'),
-            ),
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                'Mi Clase',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Aún no tienes clases o grupos asignados. Completa tu perfil y comparte tu invitación con otras familias.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: shareInviteCard,
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Invitar a padres al colegio'),
+              ),
+            ],
           );
         }
 
@@ -71,11 +107,28 @@ class MatchingScreen extends ConsumerWidget {
             });
 
             if (peers.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Todavía no hay otras familias con clases en común.'),
-                ),
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(
+                    'Mi Clase',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Todavía no hay otras familias con clases en común.',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: shareInviteCard,
+                    icon: const Icon(Icons.share_outlined),
+                    label: const Text('Invitar a padres al colegio'),
+                  ),
+                ],
               );
             }
 
@@ -93,6 +146,12 @@ class MatchingScreen extends ConsumerWidget {
                       .textTheme
                       .bodyMedium
                       ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: shareInviteCard,
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Invitar a padres al colegio'),
                 ),
                 const SizedBox(height: 12),
                 ...peers.map((peer) => Card(
