@@ -35,9 +35,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
     setState(() => _creating = true);
     try {
-      await FirebaseFirestore.instance
-          .collection('schools/$schoolId/events')
-          .add({
+      await FirebaseFirestore.instance.collection('schools/$schoolId/events').add({
         'title': draft.title,
         'description': draft.description,
         'dateTime': Timestamp.fromDate(draft.dateTime),
@@ -49,12 +47,11 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         'reportsCount': 0,
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Evento creado.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Evento creado.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo crear el evento: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('No se pudo crear el evento: $e')));
     } finally {
       if (mounted) setState(() => _creating = false);
     }
@@ -67,29 +64,26 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final stream = FirebaseFirestore.instance
+    final events = FirebaseFirestore.instance
         .collection('schools/$schoolId/events')
         .orderBy('dateTime')
         .limit(120)
         .snapshots();
+    final users =
+        FirebaseFirestore.instance.collection('schools/$schoolId/users').snapshots();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text(
           'Entre Padres',
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Text(
           'Coordina quedadas, actividades y avisos importantes entre familias.',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style:
+              Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -99,80 +93,95 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         ),
         const SizedBox(height: 12),
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: stream,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              final message = snapshot.error.toString();
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Text(
-                    message.contains('failed-precondition')
-                        ? 'No se pudieron cargar eventos por configuración de consulta. Ya se aplicó un fallback; recarga la página.'
-                        : 'No se pudieron cargar eventos: $message',
-                  ),
-                ),
-              );
-            }
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
+          stream: users,
+          builder: (context, usersSnapshot) {
+            final userNames = {
+              for (final userDoc in usersSnapshot.data?.docs ?? const [])
+                userDoc.id: ((userDoc.data()['displayName'] as String?) ?? '').trim(),
+            };
 
-            final docs = (snapshot.data?.docs ?? const []).where((doc) {
-              final data = doc.data();
-              return data['status'] == 'active';
-            }).toList();
-            if (docs.isEmpty) {
-              return const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(14),
-                  child: Text('Todavía no hay eventos activos.'),
-                ),
-              );
-            }
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: events,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  final message = snapshot.error.toString();
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Text(
+                        message.contains('failed-precondition')
+                            ? 'No se pudieron cargar eventos por configuración de consulta. Ya se aplicó un fallback; recarga la página.'
+                            : 'No se pudieron cargar eventos: $message',
+                      ),
+                    ),
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
 
-            return Column(
-              children: docs.map((doc) {
-                final data = doc.data();
-                final title = (data['title'] as String?)?.trim();
-                final description = (data['description'] as String?)?.trim();
-                final place = (data['place'] as String?)?.trim();
-                final category =
-                    (data['category'] as String?)?.trim() ?? 'general';
-                final dateTime = data['dateTime'] as Timestamp?;
+                final docs = (snapshot.data?.docs ?? const []).where((doc) {
+                  final data = doc.data();
+                  return data['status'] == 'active';
+                }).toList();
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: ListTile(
-                    title: Text(title?.isNotEmpty == true ? title! : 'Evento'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text(description?.isNotEmpty == true
-                            ? description!
-                            : 'Sin descripción'),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
+                if (docs.isEmpty) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(14),
+                      child: Text('Todavía no hay eventos activos.'),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: docs.map((doc) {
+                    final data = doc.data();
+                    final title = (data['title'] as String?)?.trim();
+                    final description = (data['description'] as String?)?.trim();
+                    final place = (data['place'] as String?)?.trim();
+                    final category = (data['category'] as String?)?.trim() ?? 'general';
+                    final dateTime = data['dateTime'] as Timestamp?;
+                    final organizerUid = (data['organizerUid'] as String? ?? '').trim();
+                    final organizerName = (userNames[organizerUid] ?? '').trim();
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        title: Text(title?.isNotEmpty == true ? title! : 'Evento'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Chip(label: Text(category)),
-                            Chip(
-                                label: Text(place?.isNotEmpty == true
-                                    ? place!
-                                    : 'Sin ubicación')),
-                            Chip(label: Text(_prettyDate(dateTime))),
+                            const SizedBox(height: 4),
+                            Text(description?.isNotEmpty == true ? description! : 'Sin descripción'),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                Chip(label: Text(category)),
+                                Chip(label: Text(place?.isNotEmpty == true ? place! : 'Sin ubicación')),
+                                Chip(label: Text(_prettyDate(dateTime))),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Publicado por: ${organizerName.isNotEmpty ? organizerName : 'Familia'}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             );
           },
         ),
@@ -237,91 +246,92 @@ class _EventComposerSheetState extends State<_EventComposerSheet> {
     if (time == null || !mounted) return;
 
     setState(() {
-      _dateTime =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _dateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Nuevo evento',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800),
+
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Nuevo evento',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _title,
+                decoration: const InputDecoration(labelText: 'Título'),
+                validator: (value) => (value ?? '').trim().length < 4 ? 'Título muy corto.' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _description,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: 'Descripción'),
+                validator: (value) => (value ?? '').trim().length < 8 ? 'Describe el evento.' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _place,
+                decoration: const InputDecoration(labelText: 'Lugar'),
+                validator: (value) => (value ?? '').trim().isEmpty ? 'Indica el lugar.' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _category,
+                decoration: const InputDecoration(labelText: 'Categoría'),
+                validator: (value) => (value ?? '').trim().isEmpty ? 'Indica una categoría.' : null,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _pickDateTime,
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  'Fecha: ${_dateTime.day}/${_dateTime.month} ${_dateTime.hour}:${_dateTime.minute.toString().padLeft(2, '0')}',
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _title,
-                  decoration: const InputDecoration(labelText: 'Título'),
-                  validator: (value) => (value ?? '').trim().length < 4
-                      ? 'Título muy corto.'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _description,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Descripción'),
-                  validator: (value) => (value ?? '').trim().length < 8
-                      ? 'Describe el evento.'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _place,
-                  decoration: const InputDecoration(labelText: 'Lugar'),
-                  validator: (value) =>
-                      (value ?? '').trim().isEmpty ? 'Indica el lugar.' : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _category,
-                  decoration: const InputDecoration(labelText: 'Categoría'),
-                  validator: (value) => (value ?? '').trim().isEmpty
-                      ? 'Indica una categoría.'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _pickDateTime,
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  label: Text(
-                      'Fecha: ${_dateTime.day}/${_dateTime.month} ${_dateTime.hour}:${_dateTime.minute.toString().padLeft(2, '0')}'),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () {
-                    if (!_formKey.currentState!.validate()) return;
-                    Navigator.of(context).pop(
-                      _EventDraft(
-                        title: _title.text.trim(),
-                        description: _description.text.trim(),
-                        place: _place.text.trim(),
-                        category: _category.text.trim(),
-                        dateTime: _dateTime,
-                      ),
-                    );
-                  },
-                  child: const Text('Guardar evento'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        if (!_formKey.currentState!.validate()) return;
+                        Navigator.of(context).pop(
+                          _EventDraft(
+                            title: _title.text.trim(),
+                            description: _description.text.trim(),
+                            place: _place.text.trim(),
+                            category: _category.text.trim(),
+                            dateTime: _dateTime,
+                          ),
+                        );
+                      },
+                      child: const Text('Guardar evento'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
