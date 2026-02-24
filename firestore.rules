@@ -1,21 +1,139 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isRoot() {
+      return signedIn() && request.auth.token.role == 'root';
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
     function schoolUserDoc(schoolId) {
       return /databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid);
     }
+
     function userDoc(schoolId, uid) {
       return /databases/$(database)/documents/schools/$(schoolId)/users/$(uid);
     }
-    function inSchool(schoolId) { return signedIn() && exists(schoolUserDoc(schoolId)); }
-    function myRole(schoolId) { return get(schoolUserDoc(schoolId)).data.role; }
-    function isStaff(schoolId) { return inSchool(schoolId) && (myRole(schoolId) in ['moderator', 'admin']); }
-    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
 
-    // Seguridad: evitar escalada de privilegios vía /users/{uid}.
-    // - El cliente NO puede mutar role/classIds/children ni borrar su doc.
-    // - Solo permite campos de perfil y telemetría mínimos.
+    function globalUserDoc(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function inSchool(schoolId) {
+      return signedIn() && exists(schoolUserDoc(schoolId));
+    }
+
+    function myRole(schoolId) {
+      return get(schoolUserDoc(schoolId)).data.role;
+    }
+
+    function isStaff(schoolId) {
+      return inSchool(schoolId) && (myRole(schoolId) in ['moderator', 'admin']);
+    }
+
+    function colegioKeys() {
+      return [
+        'codigoCentro',
+        'nombre',
+        'localidad',
+        'provincia',
+        'nombre_normalizado',
+        'localidad_normalizada',
+        'provincia_normalizada',
+        'activo',
+        'updatedAt',
+        'updatedBy',
+      ];
+    }
+
+    function validColegioPayload(docId) {
+      return request.resource.data.keys().hasOnly(colegioKeys())
+        && request.resource.data.codigoCentro is string
+        && request.resource.data.codigoCentro == docId
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() > 1
+        && request.resource.data.localidad is string
+        && request.resource.data.localidad.size() > 1
+        && request.resource.data.provincia is string
+        && request.resource.data.provincia.size() > 1
+        && request.resource.data.nombre_normalizado is string
+        && request.resource.data.localidad_normalizada is string
+        && request.resource.data.provincia_normalizada is string
+        && request.resource.data.activo is bool
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function globalUserCreateKeys() {
+      return [
+        'schoolId',
+        'schoolName',
+        'schoolLocalidad',
+        'schoolProvincia',
+        'displayName',
+        'photoUrl',
+        'createdAt',
+        'updatedAt',
+        'lastActiveAt',
+      ];
+    }
+
+    function globalUserUpdateKeys() {
+      return [
+        'displayName',
+        'photoUrl',
+        'updatedAt',
+        'lastActiveAt',
+      ];
+    }
+
+    function schoolSnapshotMatchesCatalog() {
+      return request.resource.data.schoolId is string
+        && request.resource.data.schoolId.size() > 0
+        && exists(/databases/$(database)/documents/colegios/$(request.resource.data.schoolId))
+        && get(/databases/$(database)/documents/colegios/$(request.resource.data.schoolId)).data.activo == true
+        && request.resource.data.schoolName == get(/databases/$(database)/documents/colegios/$(request.resource.data.schoolId)).data.nombre
+        && request.resource.data.schoolLocalidad == get(/databases/$(database)/documents/colegios/$(request.resource.data.schoolId)).data.localidad
+        && request.resource.data.schoolProvincia == get(/databases/$(database)/documents/colegios/$(request.resource.data.schoolId)).data.provincia;
+    }
+
+    function validGlobalUserCreate(uid) {
+      return isOwner(uid)
+        && request.resource.data.keys().hasAll([
+          'schoolId',
+          'schoolName',
+          'schoolLocalidad',
+          'schoolProvincia',
+          'updatedAt',
+        ])
+        && request.resource.data.keys().hasOnly(globalUserCreateKeys())
+        && schoolSnapshotMatchesCatalog()
+        && (request.resource.data.displayName == null || request.resource.data.displayName is string)
+        && (request.resource.data.photoUrl == null || request.resource.data.photoUrl is string)
+        && (request.resource.data.createdAt == null || request.resource.data.createdAt is timestamp)
+        && (request.resource.data.lastActiveAt == null || request.resource.data.lastActiveAt is timestamp)
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validGlobalUserUpdate(uid) {
+      return isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(globalUserUpdateKeys())
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.schoolName == resource.data.schoolName
+        && request.resource.data.schoolLocalidad == resource.data.schoolLocalidad
+        && request.resource.data.schoolProvincia == resource.data.schoolProvincia
+        && (request.resource.data.displayName == null || request.resource.data.displayName is string)
+        && (request.resource.data.photoUrl == null || request.resource.data.photoUrl is string)
+        && (request.resource.data.lastActiveAt == null || request.resource.data.lastActiveAt is timestamp)
+        && request.resource.data.updatedAt is timestamp;
+    }
+
     function userSelfWritableKeys() {
       return [
         'displayName',
@@ -29,48 +147,71 @@ service cloud.firestore {
         'updatedAt',
       ];
     }
+
+    function safeSchoolUserCreate(uid, schoolId) {
+      return request.resource.data.keys().hasOnly([
+          'displayName',
+          'photoUrl',
+          'role',
+          'children',
+          'classIds',
+          'createdAt',
+          'lastActiveAt',
+          'updatedAt',
+        ])
+        && request.resource.data.displayName is string
+        && (request.resource.data.photoUrl == null || request.resource.data.photoUrl is string)
+        && request.resource.data.role == 'parent'
+        && request.resource.data.children is list
+        && request.resource.data.classIds is list
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.lastActiveAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && getAfter(globalUserDoc(uid)).data.schoolId == schoolId;
+    }
+
     function isSafeSelfUserUpdate() {
-      // Solo permitir cambiar un subconjunto pequeño de claves.
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(userSelfWritableKeys())
-        // Inmutables - si existen en los datos originales, no pueden cambiar
         && (resource.data.role == null || request.resource.data.role == resource.data.role)
         && (resource.data.createdAt == null || request.resource.data.createdAt == resource.data.createdAt);
     }
+
     function isChatParticipant(schoolId, chatId) {
       return inSchool(schoolId)
         && request.auth.uid in get(/databases/$(database)/documents/schools/$(schoolId)/chats/$(chatId)).data.participants;
     }
 
+    match /colegios/{codigoCentro} {
+      allow get, list: if signedIn() && (resource.data.activo == true || isRoot());
+      allow create, update: if isRoot() && validColegioPayload(codigoCentro);
+      allow delete: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isRoot();
+      allow create: if validGlobalUserCreate(uid);
+      allow update: if validGlobalUserUpdate(uid) || isRoot();
+      allow delete: if false;
+    }
+
     match /schools/{schoolId} {
-      // Permite al cliente autenticado enumerar escuelas para resolver su membresía
-      // (el acceso a datos sensibles sigue restringido en subcolecciones).
       allow read: if signedIn();
       allow write: if false;
 
       match /classes/{classId} {
         allow read: if inSchool(schoolId);
-        allow write: if isStaff(schoolId);
+        allow write: if isStaff(schoolId) || isRoot();
       }
 
       match /users/{uid} {
-        // Permite al usuario leer su propio documento aunque aún no haya "inSchool"
-        // (necesario para resolver membresía desde collectionGroup durante onboarding)
-        allow read: if isOwner(uid) || inSchool(schoolId);
-
-        // Alta de membresía solo por Cloud Function (Admin SDK)
-        allow create: if false;
-
-        // El usuario solo puede actualizar campos inocuos de su perfil.
-        allow update: if isOwner(uid) && isSafeSelfUserUpdate();
-
-        // Staff puede actualizar usuarios (p.ej. role) desde UI interna o Admin SDK.
-        // Nota: no permitir delete desde cliente; el borrado real va por Function.
-        allow update: if isStaff(schoolId);
+        allow read: if isOwner(uid) || inSchool(schoolId) || isRoot();
+        allow create: if (isOwner(uid) && safeSchoolUserCreate(uid, schoolId)) || isStaff(schoolId) || isRoot();
+        allow update: if (isOwner(uid) && isSafeSelfUserUpdate()) || isStaff(schoolId) || isRoot();
         allow delete: if false;
       }
 
       match /posts/{postId} {
-        allow read: if inSchool(schoolId);
+        allow read: if inSchool(schoolId) || isRoot();
         allow create: if inSchool(schoolId)
           && request.resource.data.authorUid == request.auth.uid
           && request.resource.data.status == 'active'
@@ -78,21 +219,21 @@ service cloud.firestore {
           && request.resource.data.title is string
           && request.resource.data.body is string;
         allow update, delete: if inSchool(schoolId)
-          && (resource.data.authorUid == request.auth.uid || isStaff(schoolId));
+          && (resource.data.authorUid == request.auth.uid || isStaff(schoolId) || isRoot());
       }
 
       match /events/{eventId} {
-        allow read: if inSchool(schoolId);
+        allow read: if inSchool(schoolId) || isRoot();
         allow create: if inSchool(schoolId)
           && request.resource.data.organizerUid == request.auth.uid
           && request.resource.data.status == 'active'
           && request.resource.data.title is string
           && request.resource.data.place is string;
         allow update, delete: if inSchool(schoolId)
-          && (resource.data.organizerUid == request.auth.uid || isStaff(schoolId));
+          && (resource.data.organizerUid == request.auth.uid || isStaff(schoolId) || isRoot());
 
         match /attendees/{uid} {
-          allow read: if inSchool(schoolId);
+          allow read: if inSchool(schoolId) || isRoot();
           allow create, update, delete: if inSchool(schoolId) && isOwner(uid);
         }
       }
@@ -100,13 +241,13 @@ service cloud.firestore {
       match /reports/{reportId} {
         allow create: if inSchool(schoolId)
           && request.resource.data.reporterUid == request.auth.uid;
-        allow read, update: if isStaff(schoolId);
+        allow read, update: if isStaff(schoolId) || isRoot();
         allow delete: if false;
       }
 
       match /connections/{connectionId} {
         allow read: if inSchool(schoolId)
-          && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isStaff(schoolId));
+          && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid || isStaff(schoolId) || isRoot());
         allow create: if inSchool(schoolId)
           && request.resource.data.fromUid == request.auth.uid
           && request.resource.data.toUid is string
@@ -114,20 +255,16 @@ service cloud.firestore {
           && request.resource.data.status == 'pending'
           && exists(userDoc(schoolId, request.resource.data.toUid));
         allow update: if inSchool(schoolId)
-          && (resource.data.toUid == request.auth.uid || isStaff(schoolId));
+          && (resource.data.toUid == request.auth.uid || isStaff(schoolId) || isRoot());
         allow delete: if false;
       }
 
       match /chats/{chatId} {
-        allow read: if inSchool(schoolId) && request.auth.uid in resource.data.participants;
-
-        // Crear/enviar/actualizar chats solo por Cloud Functions (anti-spam + integridad lastMessage)
+        allow read: if (inSchool(schoolId) && request.auth.uid in resource.data.participants) || isRoot();
         allow create, update, delete: if false;
 
         match /messages/{messageId} {
-          allow read: if isChatParticipant(schoolId, chatId);
-
-          // Escritura por Function para validar y actualizar lastMessage de forma atómica.
+          allow read: if isChatParticipant(schoolId, chatId) || isRoot();
           allow create, update, delete: if false;
         }
       }

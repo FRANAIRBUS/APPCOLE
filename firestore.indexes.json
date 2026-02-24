@@ -24,6 +24,33 @@
         {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "dateTime", "order": "ASCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "colegios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "activo", "order": "ASCENDING"},
+        {"fieldPath": "provincia_normalizada", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "colegios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "activo", "order": "ASCENDING"},
+        {"fieldPath": "provincia_normalizada", "order": "ASCENDING"},
+        {"fieldPath": "localidad_normalizada", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "colegios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "activo", "order": "ASCENDING"},
+        {"fieldPath": "provincia_normalizada", "order": "ASCENDING"},
+        {"fieldPath": "localidad_normalizada", "order": "ASCENDING"},
+        {"fieldPath": "nombre_normalizado", "order": "ASCENDING"}
+      ]
     }
   ],
   "fieldOverrides": []

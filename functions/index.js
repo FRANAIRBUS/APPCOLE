@@ -14,9 +14,21 @@ function assertAuth(request) {
   return uid;
 }
 
+function assertRootClaim(request) {
+  const role = String(request.auth?.token?.role || '').trim();
+  if (role !== 'root') {
+    throw new HttpsError('permission-denied', 'Root role required');
+  }
+}
+
 function normalizeRole(role) {
   const r = String(role || '').trim();
   return r === 'admin' || r === 'moderator' ? r : 'parent';
+}
+
+function normalizeCustomRole(role) {
+  const r = String(role || '').trim();
+  return ['root', 'admin', 'moderator', 'parent'].includes(r) ? r : null;
 }
 
 async function resolveSchoolIdForUid(uid) {
@@ -188,6 +200,36 @@ exports.redeemInviteCode = onCall(async (request) => {
   });
 
   return result;
+});
+
+exports.setUserRole = onCall(async (request) => {
+  const actorUid = assertAuth(request);
+  assertRootClaim(request);
+
+  const targetUid = String(request.data?.uid || '').trim();
+  const requestedRole = normalizeCustomRole(request.data?.role);
+
+  if (!targetUid) throw new HttpsError('invalid-argument', 'uid is required');
+  if (!requestedRole) {
+    throw new HttpsError('invalid-argument', 'role must be one of: root, admin, moderator, parent');
+  }
+
+  const userRecord = await getAuth().getUser(targetUid);
+  const nextClaims = {
+    ...(userRecord.customClaims || {}),
+    role: requestedRole,
+  };
+
+  await getAuth().setCustomUserClaims(targetUid, nextClaims);
+  await db.collection('adminAudit').add({
+    action: 'setUserRole',
+    actorUid,
+    targetUid,
+    role: requestedRole,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {ok: true, uid: targetUid, role: requestedRole};
 });
 
 exports.getOrCreateChat = onCall(async (request) => {

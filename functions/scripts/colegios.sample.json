@@ -1,0 +1,16 @@
+{
+  "colegios": [
+    {
+      "codigoCentro": "28000123",
+      "nombre": "Colegio Ejemplo",
+      "localidad": "Madrid",
+      "provincia": "Madrid"
+    },
+    {
+      "codigoCentro": "08000456",
+      "nombre": "Escola Exemple",
+      "localidad": "Barcelona",
+      "provincia": "Barcelona"
+    }
+  ]
+}

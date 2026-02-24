@@ -10,29 +10,13 @@ final authServiceProvider = Provider<AuthService>((ref) => AuthService(ref.read(
 final authStateProvider = StreamProvider<User?>((ref) => ref.read(authServiceProvider).authStateChanges());
 
 Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, String uid) async* {
-  await for (final schoolsSnap in firestore.collection('schools').snapshots()) {
-    if (schoolsSnap.docs.isEmpty) {
+  await for (final userSnap in firestore.collection('users').doc(uid).snapshots()) {
+    final schoolId = (userSnap.data()?['schoolId'] as String?)?.trim();
+    if (schoolId == null || schoolId.isEmpty) {
       yield null;
       continue;
     }
-
-    final checks = await Future.wait(
-      schoolsSnap.docs.map((schoolDoc) async {
-        final userDoc = await schoolDoc.reference.collection('users').doc(uid).get();
-        if (!userDoc.exists) return (schoolId: null as String?, lastActiveMs: 0);
-
-        final ts = userDoc.data()?['lastActiveAt'];
-        final ms = ts is Timestamp ? ts.millisecondsSinceEpoch : 0;
-        return (schoolId: schoolDoc.id, lastActiveMs: ms);
-      }),
-    );
-
-    checks.sort((a, b) => b.lastActiveMs.compareTo(a.lastActiveMs));
-    final match = checks.firstWhere(
-      (entry) => entry.schoolId != null,
-      orElse: () => (schoolId: null, lastActiveMs: 0),
-    );
-    yield match.schoolId;
+    yield schoolId;
   }
 }
 
@@ -41,6 +25,15 @@ final schoolIdProvider = StreamProvider<String?>((ref) {
   if (user == null) return Stream.value(null);
 
   return _resolveSchoolIdStream(ref.read(firestoreProvider), user.uid);
+});
+
+final isRootClaimProvider = StreamProvider<bool>((ref) {
+  final auth = ref.read(firebaseAuthProvider);
+  return auth.idTokenChanges().asyncMap((user) async {
+    if (user == null) return false;
+    final token = await user.getIdTokenResult();
+    return token.claims?['role'] == 'root';
+  });
 });
 
 enum SessionPhase { unauthenticated, needsInvite, ready }

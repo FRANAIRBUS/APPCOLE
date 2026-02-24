@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
 import '../../services/invite_share_service.dart';
@@ -179,6 +180,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
+    final isRoot = ref.watch(isRootClaimProvider).valueOrNull ?? false;
     final email = user?.email ?? '';
     final uid = user?.uid ?? '';
 
@@ -241,6 +243,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           icon: const Icon(Icons.logout),
           label: Text(_busy ? 'Procesando...' : 'Cerrar sesión'),
         ),
+        if (isRoot) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : () => context.push('/root/colegios'),
+            icon: const Icon(Icons.admin_panel_settings_outlined),
+            label: const Text('Administrar colegios'),
+          ),
+        ],
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: (_busy || schoolId == null) ? null : () => _deleteAccount(schoolId),

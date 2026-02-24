@@ -16,14 +16,23 @@ import '../features/moderation/trust_screen.dart';
 import '../features/onboarding_invite/invite_screen.dart';
 import '../features/posts/posts_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/schools/root_schools_admin_screen.dart';
 import '../features/talento/talento_screen.dart';
 import '../features/veteranos/veteranos_screen.dart';
 
 export '../features/auth/session_provider.dart'
-    show authServiceProvider, authStateProvider, schoolIdProvider, sessionStateProvider, SessionPhase, SessionState;
+    show
+        authServiceProvider,
+        authStateProvider,
+        isRootClaimProvider,
+        schoolIdProvider,
+        sessionStateProvider,
+        SessionPhase,
+        SessionState;
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final sessionAsync = ref.watch(sessionStateProvider);
+  final isRootAsync = ref.watch(isRootClaimProvider);
 
   return GoRouter(
     // En web se abre normalmente en '/', y si no existe ruta se muestra pantalla en blanco.
@@ -35,6 +44,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final onLogin = location == '/login';
       final onInvite = location == '/invite';
       final onSplash = location == '/splash';
+      final onRootArea = location.startsWith('/root');
 
       if (sessionAsync.isLoading) return onSplash ? null : '/splash';
       if (sessionAsync.hasError) return onSplash ? null : '/splash';
@@ -48,6 +58,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         case SessionPhase.needsInvite:
           return onInvite ? null : '/invite';
         case SessionPhase.ready:
+          if (onRootArea) {
+            if (isRootAsync.isLoading) return onSplash ? null : '/splash';
+            final isRoot = isRootAsync.valueOrNull ?? false;
+            if (!isRoot) return '/posts';
+          }
           if (onWelcome || onLogin || onInvite || onSplash) return '/posts';
           return null;
       }
@@ -87,6 +102,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/veteranos', builder: (_, __) => const VeteranosScreen()),
       GoRoute(path: '/bienvenida', builder: (_, __) => const BienvenidaScreen()),
       GoRoute(path: '/confianza', builder: (_, __) => const TrustScreen()),
+      GoRoute(path: '/root/colegios', builder: (_, __) => const RootSchoolsAdminScreen()),
     ],
   );
 });

@@ -1,10 +1,11 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../services/invite_service.dart';
-
-final inviteServiceProvider = Provider<InviteService>((ref) => InviteService(FirebaseFunctions.instance));
+import '../../models/school.dart';
+import '../schools/schools_providers.dart';
 
 class InviteScreen extends ConsumerStatefulWidget {
   const InviteScreen({super.key});
@@ -14,160 +15,408 @@ class InviteScreen extends ConsumerStatefulWidget {
 }
 
 class _InviteScreenState extends ConsumerState<InviteScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _code = TextEditingController();
-  final _child = TextEditingController();
-  final _age = TextEditingController();
-  bool _submitting = false;
+  final _provinceCtrl = TextEditingController();
+  final _localityCtrl = TextEditingController();
+  final _schoolNameCtrl = TextEditingController();
+
+  Timer? _provinceDebounce;
+  Timer? _localityDebounce;
+  Timer? _schoolDebounce;
+
+  List<String> _provinceOptions = const [];
+  List<String> _localityOptions = const [];
+  List<School> _schoolOptions = const [];
+
+  String? _selectedProvince;
+  String? _selectedLocality;
+  School? _selectedSchool;
+
+  bool _loadingProvinces = false;
+  bool _loadingLocalities = false;
+  bool _loadingSchools = false;
+  bool _saving = false;
   String? _error;
 
   @override
   void dispose() {
-    _code.dispose();
-    _child.dispose();
-    _age.dispose();
+    _provinceDebounce?.cancel();
+    _localityDebounce?.cancel();
+    _schoolDebounce?.cancel();
+    _provinceCtrl.dispose();
+    _localityCtrl.dispose();
+    _schoolNameCtrl.dispose();
     super.dispose();
   }
 
-  String? _validateCode(String? value) {
-    final code = (value ?? '').trim();
-    if (code.isEmpty) return 'Introduce el código.';
-    if (code.length < 4) return 'Código inválido.';
-    return null;
+  void _resetLocalityAndSchool() {
+    _localityCtrl.clear();
+    _schoolNameCtrl.clear();
+    _selectedLocality = null;
+    _selectedSchool = null;
+    _localityOptions = const [];
+    _schoolOptions = const [];
   }
 
-  String? _validateChildName(String? value) {
-    final name = (value ?? '').trim();
-    if (name.isEmpty) return 'Introduce el nombre del menor.';
-    if (name.length < 2) return 'Nombre demasiado corto.';
-    return null;
+  void _resetSchool() {
+    _schoolNameCtrl.clear();
+    _selectedSchool = null;
+    _schoolOptions = const [];
   }
 
-  String? _validateAge(String? value) {
-    final age = int.tryParse((value ?? '').trim());
-    if (age == null) return 'Edad no válida.';
-    if (age <= 0 || age > 20) return 'Introduce una edad válida.';
-    return null;
-  }
-
-  String _friendlyError(Object error) {
-    if (error is FirebaseFunctionsException) {
-      switch (error.code) {
-        case 'not-found':
-          return 'El código no existe.';
-        case 'failed-precondition':
-          return error.message ?? 'Código inválido o expirado.';
-        case 'invalid-argument':
-          return 'Revisa los datos del formulario.';
-        case 'unauthenticated':
-          return 'Tu sesión expiró. Vuelve a iniciar sesión.';
-        default:
-          return error.message ?? 'No se pudo validar el código.';
-      }
-    }
-    return error.toString();
-  }
-
-  Future<void> _redeem() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _onProvinceChanged(String value) {
     setState(() {
-      _submitting = true;
+      _selectedProvince = null;
+      _resetLocalityAndSchool();
+      _error = null;
+    });
+    _provinceDebounce?.cancel();
+    _provinceDebounce = Timer(const Duration(milliseconds: 280), () async {
+      if (!mounted) return;
+      setState(() => _loadingProvinces = true);
+      try {
+        final options = await ref.read(schoolsRepositoryProvider).searchProvinces(
+              prefix: value,
+              limit: 20,
+            );
+        if (!mounted) return;
+        setState(() => _provinceOptions = options);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _error = e.toString());
+      } finally {
+        if (mounted) setState(() => _loadingProvinces = false);
+      }
+    });
+  }
+
+  void _onLocalityChanged(String value) {
+    setState(() {
+      _selectedLocality = null;
+      _resetSchool();
+      _error = null;
+    });
+    final province = _selectedProvince;
+    if (province == null || province.isEmpty) return;
+
+    _localityDebounce?.cancel();
+    _localityDebounce = Timer(const Duration(milliseconds: 280), () async {
+      if (!mounted) return;
+      setState(() => _loadingLocalities = true);
+      try {
+        final options = await ref.read(schoolsRepositoryProvider).searchLocalities(
+              province: province,
+              prefix: value,
+              limit: 20,
+            );
+        if (!mounted) return;
+        setState(() => _localityOptions = options);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _error = e.toString());
+      } finally {
+        if (mounted) setState(() => _loadingLocalities = false);
+      }
+    });
+  }
+
+  void _onSchoolNameChanged(String value) {
+    setState(() {
+      _selectedSchool = null;
+      _error = null;
+    });
+
+    final province = _selectedProvince;
+    final locality = _selectedLocality;
+    if (province == null || locality == null) return;
+
+    _schoolDebounce?.cancel();
+    _schoolDebounce = Timer(const Duration(milliseconds: 280), () async {
+      if (!mounted) return;
+      setState(() => _loadingSchools = true);
+      try {
+        final options = await ref.read(schoolsRepositoryProvider).searchSchools(
+              province: province,
+              locality: locality,
+              namePrefix: value,
+              limit: 10,
+            );
+        if (!mounted) return;
+        setState(() => _schoolOptions = options);
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _error = e.toString());
+      } finally {
+        if (mounted) setState(() => _loadingSchools = false);
+      }
+    });
+  }
+
+  Future<void> _saveSelection() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
+    final school = _selectedSchool;
+    if (uid == null || school == null) {
+      setState(() => _error = 'Selecciona un colegio válido para continuar.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
       _error = null;
     });
     try {
-      await ref.read(inviteServiceProvider).redeemInviteCode(
-            code: _code.text.trim().toUpperCase(),
-            childName: _child.text.trim(),
-            childAge: int.parse(_age.text.trim()),
+      await ref.read(schoolsRepositoryProvider).saveUserSchoolSelection(
+            uid: uid,
+            school: school,
+            displayName: user?.displayName ?? user?.email,
+            photoUrl: user?.photoURL,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Código validado. Accediendo...')),
+        const SnackBar(content: Text('Colegio guardado. Accediendo...')),
       );
     } catch (e) {
-      setState(() => _error = _friendlyError(e));
+      if (!mounted) return;
+      setState(() => _error = e.toString());
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _showNotFoundDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('No encuentro mi colegio'),
+        content: const Text(
+          'Si tu centro no aparece, pide al administrador root que lo añada en el catálogo.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final canSearchLocality = _selectedProvince != null;
+    final canSearchSchool = _selectedProvince != null && _selectedLocality != null;
+    final canContinue = _selectedSchool != null && !_saving;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Código del colegio')),
+      appBar: AppBar(title: const Text('Selecciona tu colegio')),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: ListView(
             padding: const EdgeInsets.all(16),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Vincular cuenta al colegio',
-                        style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                        'Registro: colegio obligatorio',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Introduce el código entregado por tu colegio y los datos del menor.',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        'Busca por provincia, localidad y nombre. Debes elegir un colegio existente.',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _code,
-                        validator: _validateCode,
-                        enabled: !_submitting,
-                        textCapitalization: TextCapitalization.characters,
-                        onChanged: (value) {
-                          final upper = value.toUpperCase();
-                          if (upper != value) {
-                            _code.value = _code.value.copyWith(
-                              text: upper,
-                              selection: TextSelection.collapsed(offset: upper.length),
-                            );
-                          }
-                        },
-                        decoration: const InputDecoration(labelText: 'Código de invitación'),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _provinceCtrl,
+                        enabled: !_saving,
+                        decoration: InputDecoration(
+                          labelText: '1) Provincia',
+                          suffixIcon: _loadingProvinces
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        onChanged: _onProvinceChanged,
                       ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _child,
-                        validator: _validateChildName,
-                        enabled: !_submitting,
-                        decoration: const InputDecoration(labelText: 'Nombre del menor'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _age,
-                        validator: _validateAge,
-                        enabled: !_submitting,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Edad'),
-                        onFieldSubmitted: (_) => _submitting ? null : _redeem(),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: _submitting ? null : _redeem,
-                        child: Text(_submitting ? 'Validando...' : 'Validar y continuar'),
-                      ),
-                      if (_error != null) ...[
+                      if (_provinceOptions.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _provinceOptions
+                              .map(
+                                (province) => ChoiceChip(
+                                  label: Text(province),
+                                  selected: _selectedProvince == province,
+                                  onSelected: _saving
+                                      ? null
+                                      : (_) {
+                                          setState(() {
+                                            _selectedProvince = province;
+                                            _provinceCtrl.text = province;
+                                            _provinceOptions = const [];
+                                            _resetLocalityAndSchool();
+                                          });
+                                        },
+                                ),
+                              )
+                              .toList(),
+                        ),
                       ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _localityCtrl,
+                        enabled: canSearchLocality && !_saving,
+                        decoration: InputDecoration(
+                          labelText: '2) Localidad',
+                          suffixIcon: _loadingLocalities
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        onChanged: _onLocalityChanged,
+                      ),
+                      if (_localityOptions.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _localityOptions
+                              .map(
+                                (locality) => ChoiceChip(
+                                  label: Text(locality),
+                                  selected: _selectedLocality == locality,
+                                  onSelected: _saving
+                                      ? null
+                                      : (_) {
+                                          setState(() {
+                                            _selectedLocality = locality;
+                                            _localityCtrl.text = locality;
+                                            _localityOptions = const [];
+                                            _resetSchool();
+                                          });
+                                        },
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _schoolNameCtrl,
+                        enabled: canSearchSchool && !_saving,
+                        decoration: InputDecoration(
+                          labelText: '3) Colegio (prefijo)',
+                          suffixIcon: _loadingSchools
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        onChanged: _onSchoolNameChanged,
+                      ),
+                      const SizedBox(height: 10),
+                      if (_schoolOptions.isEmpty &&
+                          _schoolNameCtrl.text.trim().isNotEmpty &&
+                          !_loadingSchools)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: _showNotFoundDialog,
+                            icon: const Icon(Icons.help_outline),
+                            label: const Text('No encuentro mi colegio'),
+                          ),
+                        ),
+                      if (_schoolOptions.isNotEmpty)
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 320),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: _schoolOptions.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 6),
+                            itemBuilder: (context, index) {
+                              final school = _schoolOptions[index];
+                              final selected =
+                                  _selectedSchool?.codigoCentro == school.codigoCentro;
+                              return Card(
+                                margin: EdgeInsets.zero,
+                                child: ListTile(
+                                  selected: selected,
+                                  selectedTileColor: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer
+                                      .withValues(alpha: 0.25),
+                                  title: Text(school.nombre),
+                                  subtitle: Text(
+                                    '${school.localidad}, ${school.provincia} · ${school.codigoCentro}',
+                                  ),
+                                  trailing: selected
+                                      ? const Icon(Icons.check_circle_outline)
+                                      : null,
+                                  onTap: _saving
+                                      ? null
+                                      : () {
+                                          setState(() => _selectedSchool = school);
+                                        },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      if (_selectedSchool != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          'Seleccionado: ${_selectedSchool!.nombre} (${_selectedSchool!.codigoCentro})',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _error!,
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      FilledButton(
+                        onPressed: canContinue ? _saveSelection : null,
+                        child: Text(_saving
+                            ? 'Guardando...'
+                            : 'Continuar con este colegio'),
+                      ),
                     ],
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
