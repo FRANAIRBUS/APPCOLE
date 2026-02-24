@@ -14,6 +14,10 @@ git status
 git pull --rebase origin main
 
 
+flutter build web --release
+
+firebase deploy --only hosting
+
 Ejecuta scripts/ci_local.sh
 
 flutter run -d web-server --web-port 8081 --web-hostname 0.0.0.0

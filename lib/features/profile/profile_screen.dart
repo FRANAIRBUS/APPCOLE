@@ -76,14 +76,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Perfil actualizado.')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perfil actualizado.')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar el perfil: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo guardar el perfil: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
       displayNameController.dispose();
@@ -227,7 +231,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _children = widget.initialChildren
         .map((child) => _ChildControllers(name: child.name, classId: child.classId))
         .toList();
-    _extraGroups = widget.initialExtraGroups.map(TextEditingController.new).toList();
+    _extraGroups = widget.initialExtraGroups.map((group) => TextEditingController(text: group)).toList();
   }
 
   @override
