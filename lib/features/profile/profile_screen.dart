@@ -63,7 +63,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
 
-    if (updated == null) return;
+    if (updated == null || !mounted) return;
 
     setState(() => _busy = true);
     try {
@@ -77,18 +77,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Perfil actualizado.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil actualizado.')),
+      );
     } catch (e) {
       if (!mounted) return;
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo guardar el perfil: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar el perfil: $e')),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
       displayNameController.dispose();
