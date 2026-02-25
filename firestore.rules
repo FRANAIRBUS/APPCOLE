@@ -13,6 +13,10 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function isBlankString(value) {
+      return value == null || (value is string && value.size() == 0);
+    }
+
     function schoolUserDoc(schoolId) {
       return /databases/$(database)/documents/schools/$(schoolId)/users/$(request.auth.uid);
     }
@@ -147,10 +151,10 @@ service cloud.firestore {
           ||
           (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(globalUserOnboardingInitKeys())
-            && resource.data.schoolId == null
-            && resource.data.schoolName == null
-            && resource.data.schoolLocalidad == null
-            && resource.data.schoolProvincia == null
+            && isBlankString(resource.data.schoolId)
+            && isBlankString(resource.data.schoolName)
+            && isBlankString(resource.data.schoolLocalidad)
+            && isBlankString(resource.data.schoolProvincia)
             && schoolSnapshotMatchesCatalog()
           )
         )
@@ -208,7 +212,8 @@ service cloud.firestore {
     }
 
     match /colegios/{codigoCentro} {
-      allow get, list: if signedIn() && (resource.data.activo == true || isRoot());
+      allow get: if signedIn() && (resource == null || resource.data.activo == true || isRoot());
+      allow list: if signedIn() && (resource.data.activo == true || isRoot());
       allow create, update: if isRoot() && validColegioPayload(codigoCentro);
       allow delete: if false;
     }
