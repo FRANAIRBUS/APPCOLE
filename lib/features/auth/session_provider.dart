@@ -59,6 +59,17 @@ final isRootClaimProvider = StreamProvider<bool>((ref) {
   });
 });
 
+final globalUserProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return Stream.value(null);
+  return ref
+      .read(firestoreProvider)
+      .collection('users')
+      .doc(user.uid)
+      .snapshots()
+      .map((snap) => snap.data());
+});
+
 enum SessionPhase { unauthenticated, needsInvite, ready }
 
 class SessionState {

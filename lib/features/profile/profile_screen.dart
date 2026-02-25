@@ -180,9 +180,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
+    final globalUser = ref.watch(globalUserProvider).valueOrNull;
     final isRoot = ref.watch(isRootClaimProvider).valueOrNull ?? false;
     final email = user?.email ?? '';
     final uid = user?.uid ?? '';
+    final schoolName = (globalUser?['schoolName'] as String? ?? '').trim();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -204,7 +206,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Colegio: ${schoolId ?? 'Pendiente de vinculación'}',
+                  schoolId == null
+                      ? 'Colegio: Pendiente de vinculación'
+                      : (schoolName.isNotEmpty
+                          ? 'Colegio: $schoolName ($schoolId)'
+                          : 'Colegio: $schoolId'),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
