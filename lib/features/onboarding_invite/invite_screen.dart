@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -39,10 +40,10 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   bool _saving = false;
   String? _error;
 
-  bool _processedLink = false;
-  School? _invitedSchool;
-  String? _invitedSchoolId;
-  String? _referrerUid;
+  bool _parsedDeepLink = false;
+  String? _inviteSchoolId;
+  String? _inviteReferrerUid;
+  bool _prefillLoading = false;
 
   @override
   void dispose() {
@@ -53,6 +54,60 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     _localityCtrl.dispose();
     _schoolNameCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_parsedDeepLink) return;
+    _parsedDeepLink = true;
+
+    final uri = GoRouterState.of(context).uri;
+    _inviteSchoolId = uri.queryParameters['schoolId']?.trim();
+    _inviteReferrerUid = uri.queryParameters['referrerUid']?.trim();
+
+    // Si el deep-link trae schoolId, precarga y preselecciona el cole.
+    final schoolId = _inviteSchoolId;
+    if (schoolId != null && schoolId.isNotEmpty) {
+      _prefillFromSchoolId(schoolId);
+    }
+  }
+
+  Future<void> _prefillFromSchoolId(String schoolId) async {
+    setState(() {
+      _prefillLoading = true;
+      _error = null;
+    });
+    try {
+      // No usamos el repositorio aquí: el deep-link debe poder preseleccionar
+      // el colegio incluso si el repositorio cambia. La colección canónica
+      // del catálogo es 'colegios'.
+      final doc = await FirebaseFirestore.instance.collection('colegios').doc(schoolId).get();
+      if (!doc.exists) {
+        if (!mounted) return;
+        setState(() => _error = 'La invitación apunta a un colegio que ya no existe.');
+        return;
+      }
+
+      final school = School.fromDoc(doc);
+      if (!mounted) return;
+      setState(() {
+        _selectedSchool = school;
+        _selectedProvince = school.provincia;
+        _selectedLocality = school.localidad;
+        _provinceCtrl.text = school.provincia;
+        _localityCtrl.text = school.localidad;
+        _schoolNameCtrl.text = school.nombre;
+        _provinceOptions = const [];
+        _localityOptions = const [];
+        _schoolOptions = [school];
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _prefillLoading = false);
+    }
   }
 
   void _resetLocalityAndSchool() {
@@ -190,6 +245,13 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     }
   }
 
+  void _goToLoginPreservingInvite() {
+    final current = GoRouterState.of(context).uri;
+    final next = current.toString();
+    final loginUri = Uri(path: '/login', queryParameters: {'next': next}).toString();
+    context.go(loginUri);
+  }
+
   Future<void> _showNotFoundDialog() async {
     await showDialog<void>(
       context: context,
@@ -210,51 +272,11 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Deep-link: /invite?schoolId=...&referrerUid=...
-    if (!_processedLink) {
-      _processedLink = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final qp = GoRouterState.of(context).uri.queryParameters;
-        final schoolId = (qp['schoolId'] ?? '').trim();
-        final referrerUid = (qp['referrerUid'] ?? '').trim();
-        if (schoolId.isEmpty) return;
-
-        setState(() {
-          _invitedSchoolId = schoolId;
-          _referrerUid = referrerUid.isEmpty ? null : referrerUid;
-        });
-
-        try {
-          final school = await ref.read(schoolsRepositoryProvider).getActiveSchoolById(schoolId);
-          if (!mounted) return;
-          if (school == null) {
-            setState(() => _error = 'El colegio de la invitación no existe o está inactivo.');
-            return;
-          }
-          setState(() {
-            _invitedSchool = school;
-            // Preselección automática; el usuario puede cambiarlo.
-            _selectedProvince = school.provincia;
-            _selectedLocality = school.localidad;
-            _selectedSchool = school;
-            _provinceCtrl.text = school.provincia;
-            _localityCtrl.text = school.localidad;
-            _schoolNameCtrl.text = school.nombre;
-          });
-        } catch (e) {
-          if (!mounted) return;
-          setState(() => _error = e.toString());
-        }
-      });
-    }
-
+    final user = FirebaseAuth.instance.currentUser;
+    final isSignedIn = user != null;
     final canSearchLocality = _selectedProvince != null;
     final canSearchSchool = _selectedProvince != null && _selectedLocality != null;
     final canContinue = _selectedSchool != null && !_saving;
-
-    final user = FirebaseAuth.instance.currentUser;
-    final mustLogin = user == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -262,7 +284,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: _saving
+            onPressed: (_saving || !isSignedIn)
                 ? null
                 : () async {
                     await ref.read(authServiceProvider).signOut();
@@ -277,7 +299,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              if (_invitedSchool != null)
+              if (!isSignedIn) ...[
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -285,64 +307,45 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Invitación al colegio',
+                          'Invitación detectada',
                           style: Theme.of(context)
                               .textTheme
-                              .titleMedium
+                              .titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
-                          '${_invitedSchool!.nombre}\n${_invitedSchool!.localidad}, ${_invitedSchool!.provincia} · ${_invitedSchool!.codigoCentro}',
+                          'Para aceptar la invitación y entrar en el colegio, primero inicia sesión o crea tu cuenta.',
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 12),
-                        if (mustLogin)
-                          FilledButton.icon(
-                            onPressed: () {
-                              final uri = Uri(
-                                path: '/login',
-                                queryParameters: {
-                                  if (_invitedSchoolId != null) 'schoolId': _invitedSchoolId!,
-                                  if (_referrerUid != null) 'referrerUid': _referrerUid!,
-                                  'redirect': '/invite',
-                                },
-                              );
-                              context.go(uri.toString());
-                            },
-                            icon: const Icon(Icons.login),
-                            label: const Text('Inicia sesión para aceptar'),
-                          )
-                        else
-                          FilledButton.icon(
-                            onPressed: canContinue ? _saveSelection : null,
-                            icon: const Icon(Icons.check_circle_outline),
-                            label: const Text('Usar este colegio'),
+                        if (_inviteSchoolId != null && _inviteSchoolId!.isNotEmpty)
+                          Text(
+                            'Colegio de la invitación: ${_selectedSchool?.nombre.isNotEmpty == true ? _selectedSchool!.nombre : _inviteSchoolId}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Puedes usar el colegio de la invitación o buscar otro en el catálogo.',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        if (_inviteReferrerUid != null && _inviteReferrerUid!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Referente: $_inviteReferrerUid',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        const SizedBox(height: 14),
+                        FilledButton(
+                          onPressed: _goToLoginPreservingInvite,
+                          child: const Text('Iniciar sesión / Registrarme'),
                         ),
                       ],
                     ),
                   ),
                 ),
-              if (mustLogin)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Inicia sesión para seleccionar y guardar tu colegio. Si has abierto un enlace de invitación, el colegio se preseleccionará automáticamente tras el login.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 12),
+              ],
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -535,12 +538,10 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
                       ],
                       const SizedBox(height: 14),
                       FilledButton(
-                        onPressed: mustLogin ? null : (canContinue ? _saveSelection : null),
-                        child: Text(
-                          mustLogin
-                              ? 'Inicia sesión para continuar'
-                              : (_saving ? 'Guardando...' : 'Continuar con este colegio'),
-                        ),
+                        onPressed: isSignedIn && canContinue ? _saveSelection : null,
+                        child: Text(_saving
+                            ? 'Guardando...'
+                            : 'Continuar con este colegio'),
                       ),
                     ],
                   ),

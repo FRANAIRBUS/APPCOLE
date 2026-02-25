@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
 import '../../widgets/app_logo.dart';
@@ -84,6 +85,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await auth.signInWithEmail(
             email: _email.text, password: _password.text);
       }
+
+      // Si venimos de un deep-link (p.ej. invitación) preserva el destino.
+      // Importante: esto debe ocurrir *después* del login para no perder query params.
+      if (mounted) {
+        final next = GoRouterState.of(context).uri.queryParameters['next'];
+        if (next != null && next.trim().isNotEmpty) {
+          context.go(next);
+        }
+      }
     } catch (e) {
       setState(() => _error = _friendlyAuthError(e));
     } finally {
@@ -139,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Row(
                         children: [
                           const AppLogo(
-                              width: 228, height: 74, borderRadius: 12),
+                              width: 400, height: 130, borderRadius: 12),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(

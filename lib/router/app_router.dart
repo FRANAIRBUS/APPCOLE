@@ -53,28 +53,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       switch (session.phase) {
         case SessionPhase.unauthenticated:
           // App pública: landing informativa + acceso a login.
-          // Permite abrir invitaciones públicas (deep link) incluso sin sesión.
+          // Importante: permitir deep-link de invitación SIN sesión.
+          // Si lo bloqueas aquí, GoRouter te redirige a '/' y pierdes los query params.
           if (onWelcome || onLogin || onInvite) return null;
           return '/';
         case SessionPhase.needsInvite:
-          if (onInvite) return null;
-          // Si venimos de un deep-link (por ejemplo /login?schoolId=...), preserva query.
-          final qp = state.uri.queryParameters;
-          final schoolId = (qp['schoolId'] ?? '').trim();
-          final referrerUid = (qp['referrerUid'] ?? '').trim();
-          final source = (qp['source'] ?? '').trim();
-          if (onLogin && schoolId.isNotEmpty) {
-            final uri = Uri(
-              path: '/invite',
-              queryParameters: {
-                'schoolId': schoolId,
-                if (referrerUid.isNotEmpty) 'referrerUid': referrerUid,
-                if (source.isNotEmpty) 'source': source,
-              },
-            );
-            return uri.toString();
-          }
-          return '/invite';
+          return onInvite ? null : '/invite';
         case SessionPhase.ready:
           if (onRootArea) {
             if (isRootAsync.isLoading) return onSplash ? null : '/splash';

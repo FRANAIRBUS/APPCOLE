@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 const double kPersistentLogoTopPadding = 0;
 const double kPersistentLogoCardPadding = 8;
-const double kPersistentLogoImageHeight = 84;
+const double kPersistentLogoImageHeight = 130;
 const double kPersistentLogoBottomGap = 12;
 const double kPersistentLogoClearance = kPersistentLogoTopPadding +
     (kPersistentLogoCardPadding * 2) +
@@ -12,8 +12,8 @@ const double kPersistentLogoClearance = kPersistentLogoTopPadding +
 class AppLogo extends StatelessWidget {
   const AppLogo({
     super.key,
-    this.width = 220,
-    this.height = 72,
+    this.width = 400,
+    this.height = 130,
     this.borderRadius = 10,
     this.fit = BoxFit.contain,
   });
@@ -61,7 +61,7 @@ class PersistentLogoOverlay extends StatelessWidget {
               child: const Padding(
                 padding: EdgeInsets.all(kPersistentLogoCardPadding),
                 child: AppLogo(
-                  width: 300,
+                  width: 400,
                   height: kPersistentLogoImageHeight,
                   borderRadius: 10,
                 ),

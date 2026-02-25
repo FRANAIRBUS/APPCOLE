@@ -64,7 +64,7 @@ class _HeroPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              const AppLogo(width: 240, height: 78, borderRadius: 12),
+              const AppLogo(width: 400, height: 130, borderRadius: 12),
               const SizedBox(width: 10),
               Text(
                 'ColeConecta',
