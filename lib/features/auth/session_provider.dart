@@ -33,13 +33,23 @@ Future<String?> _resolveLegacySchoolId(FirebaseFirestore firestore, String uid) 
 }
 
 Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, String uid) async* {
+  String? lastResolvedSchoolId;
   await for (final userSnap in firestore.collection('users').doc(uid).snapshots()) {
     final schoolId = (userSnap.data()?['schoolId'] as String?)?.trim();
     if (schoolId != null && schoolId.isNotEmpty) {
+      lastResolvedSchoolId = schoolId;
       yield schoolId;
       continue;
     }
-    yield await _resolveLegacySchoolId(firestore, uid);
+
+    final legacySchoolId = await _resolveLegacySchoolId(firestore, uid);
+    if (legacySchoolId != null && legacySchoolId.isNotEmpty) {
+      lastResolvedSchoolId = legacySchoolId;
+      yield legacySchoolId;
+      continue;
+    }
+
+    yield lastResolvedSchoolId;
   }
 }
 

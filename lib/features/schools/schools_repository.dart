@@ -78,19 +78,46 @@ class SchoolsRepository {
     }
 
     final normalizedName = normalizeForSearch(namePrefix);
-    Query<Map<String, dynamic>> query = _schools
+    final baseQuery = _schools
         .where('activo', isEqualTo: true)
         .where('provincia_normalizada', isEqualTo: provinceNormalized)
         .where('localidad_normalizada', isEqualTo: localityNormalized)
         .orderBy('nombre_normalizado');
 
-    if (normalizedName.isNotEmpty) {
-      query = query
-          .startAt([normalizedName]).endAt(['$normalizedName\uf8ff']);
+    if (normalizedName.isEmpty) {
+      final snap = await baseQuery.limit(limit).get();
+      return snap.docs.map(School.fromDoc).toList();
     }
 
-    final snap = await query.limit(limit).get();
-    return snap.docs.map(School.fromDoc).toList();
+    final broadLimit = limit < 20 ? 80 : limit * 4;
+    final snap = await baseQuery.limit(broadLimit).get();
+    final tokens = normalizedName.split(' ').where((t) => t.isNotEmpty).toList();
+
+    final ranked = snap.docs
+        .map(School.fromDoc)
+        .map((school) {
+          final name = school.nombreNormalizado;
+          final startsWith = name.startsWith(normalizedName);
+          final containsAllTokens = tokens.every(name.contains);
+          final containsPhrase = name.contains(normalizedName);
+          if (!startsWith && !containsAllTokens && !containsPhrase) {
+            return null;
+          }
+
+          final score = startsWith
+              ? 0
+              : (containsPhrase ? 1 : 2);
+          return (school: school, score: score);
+        })
+        .whereType<({School school, int score})>()
+        .toList()
+      ..sort((a, b) {
+        final byScore = a.score.compareTo(b.score);
+        if (byScore != 0) return byScore;
+        return a.school.nombreNormalizado.compareTo(b.school.nombreNormalizado);
+      });
+
+    return ranked.take(limit).map((entry) => entry.school).toList();
   }
 
   Future<void> saveUserSchoolSelection({
