@@ -43,7 +43,6 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   bool _parsedDeepLink = false;
   String? _inviteSchoolId;
   String? _inviteReferrerUid;
-  bool _prefillLoading = false;
 
   @override
   void dispose() {
@@ -74,10 +73,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   }
 
   Future<void> _prefillFromSchoolId(String schoolId) async {
-    setState(() {
-      _prefillLoading = true;
-      _error = null;
-    });
+    setState(() => _error = null);
     try {
       // No usamos el repositorio aquí: el deep-link debe poder preseleccionar
       // el colegio incluso si el repositorio cambia. La colección canónica
@@ -105,8 +101,6 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _prefillLoading = false);
     }
   }
 
