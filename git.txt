@@ -3,7 +3,7 @@ De local a github
 
 git status
 git add .
-git commit -m "Actualiza X"
+git commit -m "Actualiza Manual"
 git push origin main
 
 
