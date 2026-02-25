@@ -264,6 +264,15 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     );
   }
 
+  void _chooseAnotherSchool() {
+    setState(() {
+      _selectedSchool = null;
+      _error = null;
+      _schoolNameCtrl.clear();
+      _schoolOptions = const [];
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -346,6 +355,55 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (_inviteSchoolId != null && _inviteSchoolId!.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Has recibido una invitación para unirte a este colegio',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _selectedSchool?.nombre.isNotEmpty == true
+                                    ? 'Colegio invitado: ${_selectedSchool!.nombre}'
+                                    : 'Colegio invitado: $_inviteSchoolId',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Si eres padre/madre de un alumno de este colegio, continúa con esta selección. Si no corresponde, busca el colegio correcto.',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: _saving ? null : _chooseAnotherSchool,
+                                  icon: const Icon(Icons.search),
+                                  label: const Text('Buscar otro colegio'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Text(
                         'Registro: colegio obligatorio',
                         style: Theme.of(context)

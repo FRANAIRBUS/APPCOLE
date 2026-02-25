@@ -46,6 +46,50 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final onSplash = location == '/splash';
       final onRootArea = location.startsWith('/root');
 
+      String? buildInviteLocationFromState() {
+        final query = state.uri.queryParameters;
+        final schoolId = (query['schoolId'] ?? '').trim();
+        final referrerUid = (query['referrerUid'] ?? '').trim();
+        final source = (query['source'] ?? '').trim();
+
+        if (schoolId.isNotEmpty) {
+          return Uri(
+            path: '/invite',
+            queryParameters: {
+              'schoolId': schoolId,
+              if (referrerUid.isNotEmpty) 'referrerUid': referrerUid,
+              if (source.isNotEmpty) 'source': source,
+            },
+          ).toString();
+        }
+
+        final nextRaw = (query['next'] ?? '').trim();
+        if (nextRaw.isNotEmpty) {
+          final parsed = Uri.tryParse(nextRaw);
+          if (parsed != null && parsed.path == '/invite') {
+            final nextSchoolId =
+                (parsed.queryParameters['schoolId'] ?? '').trim();
+            if (nextSchoolId.isNotEmpty) {
+              final nextReferrerUid =
+                  (parsed.queryParameters['referrerUid'] ?? '').trim();
+              final nextSource =
+                  (parsed.queryParameters['source'] ?? '').trim();
+              return Uri(
+                path: '/invite',
+                queryParameters: {
+                  'schoolId': nextSchoolId,
+                  if (nextReferrerUid.isNotEmpty)
+                    'referrerUid': nextReferrerUid,
+                  if (nextSource.isNotEmpty) 'source': nextSource,
+                },
+              ).toString();
+            }
+          }
+        }
+
+        return null;
+      }
+
       if (sessionAsync.isLoading) return onSplash ? null : '/splash';
       if (sessionAsync.hasError) return onSplash ? null : '/splash';
 
@@ -58,7 +102,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (onWelcome || onLogin || onInvite) return null;
           return '/';
         case SessionPhase.needsInvite:
-          return onInvite ? null : '/invite';
+          if (onInvite) return null;
+          return buildInviteLocationFromState() ?? '/invite';
         case SessionPhase.ready:
           if (onRootArea) {
             if (isRootAsync.isLoading) return onSplash ? null : '/splash';

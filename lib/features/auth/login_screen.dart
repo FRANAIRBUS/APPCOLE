@@ -110,6 +110,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       await action();
+      if (mounted) {
+        final next = GoRouterState.of(context).uri.queryParameters['next'];
+        if (next != null && next.trim().isNotEmpty) {
+          context.go(next);
+        }
+      }
     } catch (e) {
       setState(() => _error = _friendlyAuthError(e));
     } finally {
