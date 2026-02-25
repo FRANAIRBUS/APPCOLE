@@ -68,12 +68,15 @@ Future<bool> _ensureSchoolMembership({
 
   final canonicalSchoolId = catalogDoc.id;
   final catalog = catalogDoc.data() ?? const <String, dynamic>{};
-  final schoolName = (catalog['nombre'] as String? ?? '').trim();
-  final schoolLocalidad = (catalog['localidad'] as String? ?? '').trim();
-  final schoolProvincia = (catalog['provincia'] as String? ?? '').trim();
-  if (schoolName.isEmpty ||
-      schoolLocalidad.isEmpty ||
-      schoolProvincia.isEmpty) {
+  final rawSchoolName =
+      catalog['nombre'] is String ? catalog['nombre'] as String : '';
+  final rawSchoolLocalidad =
+      catalog['localidad'] is String ? catalog['localidad'] as String : '';
+  final rawSchoolProvincia =
+      catalog['provincia'] is String ? catalog['provincia'] as String : '';
+  if (rawSchoolName.trim().isEmpty ||
+      rawSchoolLocalidad.trim().isEmpty ||
+      rawSchoolProvincia.trim().isEmpty) {
     return false;
   }
 
@@ -88,9 +91,9 @@ Future<bool> _ensureSchoolMembership({
       await firestore.collection('users').doc(user.uid).set(
         {
           'schoolId': canonicalSchoolId,
-          'schoolName': schoolName,
-          'schoolLocalidad': schoolLocalidad,
-          'schoolProvincia': schoolProvincia,
+          'schoolName': rawSchoolName,
+          'schoolLocalidad': rawSchoolLocalidad,
+          'schoolProvincia': rawSchoolProvincia,
           'lastActiveAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         },
@@ -111,9 +114,9 @@ Future<bool> _ensureSchoolMembership({
       firestore.collection('users').doc(user.uid),
       {
         'schoolId': canonicalSchoolId,
-        'schoolName': schoolName,
-        'schoolLocalidad': schoolLocalidad,
-        'schoolProvincia': schoolProvincia,
+        'schoolName': rawSchoolName,
+        'schoolLocalidad': rawSchoolLocalidad,
+        'schoolProvincia': rawSchoolProvincia,
         'displayName': fallbackName,
         'photoUrl': photoUrl.isEmpty ? null : photoUrl,
         'lastActiveAt': FieldValue.serverTimestamp(),
@@ -164,21 +167,22 @@ Stream<String?> _resolveSchoolIdStream(
         lastResolvedSchoolId = canonicalSchoolId;
         if (catalogDoc != null && canonicalSchoolId != schoolId) {
           final catalog = catalogDoc.data() ?? const <String, dynamic>{};
-          final schoolName = (catalog['nombre'] as String? ?? '').trim();
-          final schoolLocalidad =
-              (catalog['localidad'] as String? ?? '').trim();
-          final schoolProvincia =
-              (catalog['provincia'] as String? ?? '').trim();
-          if (schoolName.isNotEmpty &&
-              schoolLocalidad.isNotEmpty &&
-              schoolProvincia.isNotEmpty) {
+          final rawSchoolName =
+              catalog['nombre'] is String ? catalog['nombre'] as String : '';
+          final rawSchoolLocalidad =
+              catalog['localidad'] is String ? catalog['localidad'] as String : '';
+          final rawSchoolProvincia =
+              catalog['provincia'] is String ? catalog['provincia'] as String : '';
+          if (rawSchoolName.trim().isNotEmpty &&
+              rawSchoolLocalidad.trim().isNotEmpty &&
+              rawSchoolProvincia.trim().isNotEmpty) {
             try {
               await firestore.collection('users').doc(uid).set(
                 {
                   'schoolId': canonicalSchoolId,
-                  'schoolName': schoolName,
-                  'schoolLocalidad': schoolLocalidad,
-                  'schoolProvincia': schoolProvincia,
+                  'schoolName': rawSchoolName,
+                  'schoolLocalidad': rawSchoolLocalidad,
+                  'schoolProvincia': rawSchoolProvincia,
                   'lastActiveAt': FieldValue.serverTimestamp(),
                   'updatedAt': FieldValue.serverTimestamp(),
                 },

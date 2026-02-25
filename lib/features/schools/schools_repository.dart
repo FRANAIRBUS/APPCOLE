@@ -143,15 +143,18 @@ class SchoolsRepository {
     final catalogDoc = await _resolveCatalogSchoolDoc(school);
     final catalog = catalogDoc.data() ?? const <String, dynamic>{};
     final schoolId = catalogDoc.id;
-    final schoolName = (catalog['nombre'] as String? ?? school.nombre).trim();
-    final schoolLocalidad =
-        (catalog['localidad'] as String? ?? school.localidad).trim();
-    final schoolProvincia =
-        (catalog['provincia'] as String? ?? school.provincia).trim();
+    final rawSchoolName =
+        catalog['nombre'] is String ? catalog['nombre'] as String : school.nombre;
+    final rawSchoolLocalidad = catalog['localidad'] is String
+        ? catalog['localidad'] as String
+        : school.localidad;
+    final rawSchoolProvincia = catalog['provincia'] is String
+        ? catalog['provincia'] as String
+        : school.provincia;
 
-    if (schoolName.isEmpty ||
-        schoolLocalidad.isEmpty ||
-        schoolProvincia.isEmpty) {
+    if (rawSchoolName.trim().isEmpty ||
+        rawSchoolLocalidad.trim().isEmpty ||
+        rawSchoolProvincia.trim().isEmpty) {
       throw StateError('El catálogo del colegio está incompleto.');
     }
 
@@ -160,9 +163,9 @@ class SchoolsRepository {
       _userRef(uid),
       {
         'schoolId': schoolId,
-        'schoolName': schoolName,
-        'schoolLocalidad': schoolLocalidad,
-        'schoolProvincia': schoolProvincia,
+        'schoolName': rawSchoolName,
+        'schoolLocalidad': rawSchoolLocalidad,
+        'schoolProvincia': rawSchoolProvincia,
         'displayName':
             (displayName ?? '').trim().isEmpty ? null : displayName!.trim(),
         'photoUrl': (photoUrl ?? '').trim().isEmpty ? null : photoUrl!.trim(),
