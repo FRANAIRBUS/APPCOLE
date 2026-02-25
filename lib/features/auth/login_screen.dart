@@ -139,7 +139,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Row(
                         children: [
                           const AppLogo(
-                              width: 172, height: 56, borderRadius: 12),
+                              width: 228, height: 74, borderRadius: 12),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(

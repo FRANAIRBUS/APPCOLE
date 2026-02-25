@@ -13,6 +13,8 @@ git fetch origin
 git status
 git pull --rebase origin main
 
+
+
 flutter analyze
 
 flutter build web --release
