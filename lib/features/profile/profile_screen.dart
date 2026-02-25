@@ -39,8 +39,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _busy = false;
 
   Future<void> _editProfile(String schoolId, String uid) async {
-    final userRef = FirebaseFirestore.instance.doc('schools/$schoolId/users/$uid');
+    final userRef =
+        FirebaseFirestore.instance.doc('schools/$schoolId/users/$uid');
     final snap = await userRef.get();
+    if (!mounted) return;
     final docExists = snap.exists;
     final data = snap.data() ?? <String, dynamic>{};
 
@@ -143,7 +145,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-
   Future<void> _shareInviteCard(String schoolId) async {
     setState(() => _busy = true);
     try {
@@ -153,7 +154,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tarjeta copiada. Compártela por WhatsApp o email.')),
+        const SnackBar(
+            content: Text('Tarjeta copiada. Compártela por WhatsApp o email.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -183,8 +185,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           'Esta acción elimina tu perfil y datos asociados. No se puede deshacer.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sí, borrar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Sí, borrar')),
         ],
       ),
     );
@@ -192,12 +198,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     setState(() => _busy = true);
     try {
-      await FirebaseFunctions.instance.httpsCallable('deleteMyAccount').call({'schoolId': schoolId});
+      await FirebaseFunctions.instance
+          .httpsCallable('deleteMyAccount')
+          .call({'schoolId': schoolId});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuenta eliminada.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Cuenta eliminada.')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo borrar la cuenta: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo borrar la cuenta: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -212,24 +222,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? null
         : ref.watch(schoolCatalogProvider(schoolId)).valueOrNull;
     final catalogSchoolByCode = schoolId == null
-      ? null
-      : ref.watch(schoolCatalogByCodeProvider(schoolId)).valueOrNull;
+        ? null
+        : ref.watch(schoolCatalogByCodeProvider(schoolId)).valueOrNull;
     final isRoot = ref.watch(isRootClaimProvider).valueOrNull ?? false;
     final email = user?.email ?? '';
     final uid = user?.uid ?? '';
     final schoolName = (globalUser?['schoolName'] as String? ?? '').trim();
-    final catalogSchoolName = (catalogSchool?['nombre'] as String? ?? '').trim();
-    final catalogSchoolByCodeName = (catalogSchoolByCode?['nombre'] as String? ?? '').trim();
+    final catalogSchoolName =
+        (catalogSchool?['nombre'] as String? ?? '').trim();
+    final catalogSchoolByCodeName =
+        (catalogSchoolByCode?['nombre'] as String? ?? '').trim();
     final resolvedSchoolName = schoolName.isNotEmpty
-      ? schoolName
-      : (catalogSchoolName.isNotEmpty ? catalogSchoolName : catalogSchoolByCodeName);
+        ? schoolName
+        : (catalogSchoolName.isNotEmpty
+            ? catalogSchoolName
+            : catalogSchoolByCodeName);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text(
           'Perfil',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 10),
         Card(
@@ -240,7 +257,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               children: [
                 Text(
                   email.isNotEmpty ? email : uid,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -262,22 +282,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Privacidad', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text('Privacidad',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
                 SizedBox(height: 8),
-                Text('No compartas teléfonos ni fotos de menores. Usa siempre el chat interno.'),
+                Text(
+                    'No compartas teléfonos ni fotos de menores. Usa siempre el chat interno.'),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed: (_busy || schoolId == null || uid.isEmpty) ? null : () => _editProfile(schoolId, uid),
+          onPressed: (_busy || schoolId == null || uid.isEmpty)
+              ? null
+              : () => _editProfile(schoolId, uid),
           icon: const Icon(Icons.edit_outlined),
           label: const Text('Editar perfil y alumnos'),
         ),
         const SizedBox(height: 8),
         FilledButton.icon(
-          onPressed: (_busy || schoolId == null) ? null : () => _shareInviteCard(schoolId),
+          onPressed: (_busy || schoolId == null)
+              ? null
+              : () => _shareInviteCard(schoolId),
           icon: const Icon(Icons.share_outlined),
           label: const Text('Invitar a padres al colegio'),
         ),
@@ -297,7 +323,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: (_busy || schoolId == null) ? null : () => _deleteAccount(schoolId),
+          onPressed: (_busy || schoolId == null)
+              ? null
+              : () => _deleteAccount(schoolId),
           icon: const Icon(Icons.delete_outline),
           label: const Text('Borrar cuenta (GDPR)'),
         ),
@@ -331,9 +359,12 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   void initState() {
     super.initState();
     _children = widget.initialChildren
-        .map((child) => _ChildControllers(name: child.name, classId: child.classId))
+        .map((child) =>
+            _ChildControllers(name: child.name, classId: child.classId))
         .toList();
-    _extraGroups = widget.initialExtraGroups.map((group) => TextEditingController(text: group)).toList();
+    _extraGroups = widget.initialExtraGroups
+        .map((group) => TextEditingController(text: group))
+        .toList();
   }
 
   @override
@@ -363,38 +394,48 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
               children: [
                 Text(
                   'Editar perfil',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: widget.displayNameController,
-                  decoration: const InputDecoration(labelText: 'Nombre visible (padre/madre)'),
+                  decoration: const InputDecoration(
+                      labelText: 'Nombre visible (padre/madre)'),
                   validator: (value) {
                     final trimmed = (value ?? '').trim();
-                    if (trimmed.length < 2) return 'Introduce un nombre válido.';
+                    if (trimmed.length < 2) {
+                      return 'Introduce un nombre válido.';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 14),
-                Text('Datos del alumno', style: Theme.of(context).textTheme.titleMedium),
+                Text('Datos del alumno',
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ..._buildChildren(),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: () => setState(() => _children.add(_ChildControllers(name: '', classId: ''))),
+                    onPressed: () => setState(() => _children
+                        .add(_ChildControllers(name: '', classId: ''))),
                     icon: const Icon(Icons.add),
                     label: const Text('Agregar alumno'),
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('Grupos o cursos extraescolares', style: Theme.of(context).textTheme.titleMedium),
+                Text('Grupos o cursos extraescolares',
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ..._buildGroups(),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: () => setState(() => _extraGroups.add(TextEditingController())),
+                    onPressed: () => setState(
+                        () => _extraGroups.add(TextEditingController())),
                     icon: const Icon(Icons.add),
                     label: const Text('Agregar grupo'),
                   ),
@@ -411,12 +452,14 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                             classId: child.classId.trim(),
                           ),
                         )
-                        .where((child) => child.name.isNotEmpty || child.classId.isNotEmpty)
+                        .where((child) =>
+                            child.name.isNotEmpty || child.classId.isNotEmpty)
                         .toList();
 
                     if (children.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Agrega al menos un alumno.')),
+                        const SnackBar(
+                            content: Text('Agrega al menos un alumno.')),
                       );
                       return;
                     }
@@ -427,7 +470,9 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                         .toSet()
                         .toList();
                     final classIds = {
-                      ...children.map((child) => child.classId).where((id) => id.isNotEmpty),
+                      ...children
+                          .map((child) => child.classId)
+                          .where((id) => id.isNotEmpty),
                       ...extraGroupIds,
                     }.toList();
 
@@ -459,7 +504,8 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             children: [
               TextFormField(
                 controller: child.name,
-                decoration: InputDecoration(labelText: 'Nombre del alumno ${index + 1}'),
+                decoration: InputDecoration(
+                    labelText: 'Nombre del alumno ${index + 1}'),
                 validator: (value) {
                   final name = (value ?? '').trim();
                   final classValue = child.classId.trim();
@@ -480,7 +526,8 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                       ),
                     )
                     .toList(),
-                onChanged: (value) => setState(() => child.classId = value ?? ''),
+                onChanged: (value) =>
+                    setState(() => child.classId = value ?? ''),
                 validator: (value) {
                   final classValue = (value ?? '').trim();
                   final name = child.name.text.trim();
@@ -544,7 +591,9 @@ class _EditableChild {
 class _ChildControllers {
   _ChildControllers({required String name, required String classId})
       : name = TextEditingController(text: name),
-        classId = _classOptions.contains(classId) ? classId : (classId.isEmpty ? '' : 'Otros');
+        classId = _classOptions.contains(classId)
+            ? classId
+            : (classId.isEmpty ? '' : 'Otros');
 
   final TextEditingController name;
   String classId;
