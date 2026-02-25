@@ -216,6 +216,21 @@ class _WelcomeContent extends StatelessWidget {
                 .bodyMedium
                 ?.copyWith(color: cs.onSurfaceVariant),
           ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: onLogin,
+            icon: const Icon(Icons.login),
+            label: const Text('Entrar / Crear cuenta'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Al iniciar sesión podrás seleccionar tu colegio del catálogo.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: cs.onSurfaceVariant),
+          ),
           const SizedBox(height: 18),
         ],
         Card(
@@ -290,21 +305,6 @@ class _WelcomeContent extends StatelessWidget {
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: onLogin,
-          icon: const Icon(Icons.login),
-          label: const Text('Entrar / Crear cuenta'),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Al iniciar sesión podrás seleccionar tu colegio del catálogo.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );

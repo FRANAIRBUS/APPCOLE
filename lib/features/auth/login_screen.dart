@@ -122,6 +122,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = MediaQuery.of(context).padding.top;
+    final scrollTopPadding = (kPersistentLogoClearance - topInset).clamp(0.0, 220.0);
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -134,100 +136,97 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
           ),
         ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(16, scrollTopPadding + 12, 16, 20),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const AppLogo(
-                              width: 400, height: 130, borderRadius: 12),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _isRegister ? 'Crear cuenta' : 'Acceder',
-                              style: theme.textTheme.headlineSmall,
+                          Text(
+                            _isRegister ? 'Crear cuenta' : 'Acceder',
+                            style: theme.textTheme.headlineSmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _email,
+                            validator: _validateEmail,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.email],
+                            decoration: const InputDecoration(labelText: 'Email'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _password,
+                            validator: _validatePassword,
+                            obscureText: _obscurePassword,
+                            autofillHints: _isRegister
+                                ? const [AutofillHints.newPassword]
+                                : const [AutofillHints.password],
+                            onFieldSubmitted: (_) => _busy ? null : _submit(),
+                            decoration: InputDecoration(
+                              labelText: 'Contraseña',
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
+                                icon: Icon(_obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined),
+                              ),
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _busy ? null : _submit,
+                            child: Text(_busy
+                                ? 'Procesando...'
+                                : (_isRegister ? 'Registrarme' : 'Entrar')),
+                          ),
+                          TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => setState(() {
+                                      _isRegister = !_isRegister;
+                                      _error = null;
+                                    }),
+                            child: Text(_isRegister
+                                ? 'Ya tengo cuenta'
+                                : 'Crear nueva cuenta'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _socialSignIn(() => ref
+                                    .read(authServiceProvider)
+                                    .signInWithGoogle()),
+                            child: const Text('Continuar con Google'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _socialSignIn(() => ref
+                                    .read(authServiceProvider)
+                                    .signInWithApple()),
+                            child: const Text('Continuar con Apple'),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 8),
+                            Text(_error!,
+                                style: TextStyle(color: theme.colorScheme.error)),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _email,
-                        validator: _validateEmail,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        decoration: const InputDecoration(labelText: 'Email'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _password,
-                        validator: _validatePassword,
-                        obscureText: _obscurePassword,
-                        autofillHints: _isRegister
-                            ? const [AutofillHints.newPassword]
-                            : const [AutofillHints.password],
-                        onFieldSubmitted: (_) => _busy ? null : _submit(),
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          suffixIcon: IconButton(
-                            onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
-                            icon: Icon(_obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: _busy ? null : _submit,
-                        child: Text(_busy
-                            ? 'Procesando...'
-                            : (_isRegister ? 'Registrarme' : 'Entrar')),
-                      ),
-                      TextButton(
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                  _isRegister = !_isRegister;
-                                  _error = null;
-                                }),
-                        child: Text(_isRegister
-                            ? 'Ya tengo cuenta'
-                            : 'Crear nueva cuenta'),
-                      ),
-                      OutlinedButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _socialSignIn(() => ref
-                                .read(authServiceProvider)
-                                .signInWithGoogle()),
-                        child: const Text('Continuar con Google'),
-                      ),
-                      OutlinedButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _socialSignIn(() => ref
-                                .read(authServiceProvider)
-                                .signInWithApple()),
-                        child: const Text('Continuar con Apple'),
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 8),
-                        Text(_error!,
-                            style: TextStyle(color: theme.colorScheme.error)),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),
