@@ -158,39 +158,94 @@ class SchoolsRepository {
       throw StateError('El catálogo del colegio está incompleto.');
     }
 
+    final globalUserRef = _userRef(uid);
+    final membershipRef = _firestore.doc('schools/$schoolId/users/$uid');
+    final globalSnap = await globalUserRef.get();
+    final membershipSnap = await membershipRef.get();
+    final existingSchoolId =
+        (globalSnap.data()?['schoolId'] as String? ?? '').trim();
+    if (existingSchoolId.isNotEmpty && existingSchoolId != schoolId) {
+      throw StateError('Esta cuenta ya pertenece a otro colegio.');
+    }
+
     final batch = _firestore.batch();
-    batch.set(
-      _userRef(uid),
-      {
-        'schoolId': schoolId,
-        'schoolName': rawSchoolName,
-        'schoolLocalidad': rawSchoolLocalidad,
-        'schoolProvincia': rawSchoolProvincia,
-        'displayName':
-            (displayName ?? '').trim().isEmpty ? null : displayName!.trim(),
-        'photoUrl': (photoUrl ?? '').trim().isEmpty ? null : photoUrl!.trim(),
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-    batch.set(
-      _firestore.doc('schools/$schoolId/users/$uid'),
-      {
-        'displayName': (displayName ?? '').trim().isEmpty
-            ? 'Familia'
-            : displayName!.trim(),
-        'photoUrl': (photoUrl ?? '').trim().isEmpty ? null : photoUrl!.trim(),
-        'role': 'parent',
-        'children': const [],
-        'classIds': const [],
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-    await batch.commit();
+    final safeDisplayName =
+        (displayName ?? '').trim().isEmpty ? null : displayName!.trim();
+    final safePhotoUrl =
+        (photoUrl ?? '').trim().isEmpty ? null : photoUrl!.trim();
+
+    final globalCreatePayload = {
+      'schoolId': schoolId,
+      'schoolName': rawSchoolName,
+      'schoolLocalidad': rawSchoolLocalidad,
+      'schoolProvincia': rawSchoolProvincia,
+      'displayName': safeDisplayName,
+      'photoUrl': safePhotoUrl,
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    final globalUpdatePayload = {
+      'displayName': safeDisplayName,
+      'photoUrl': safePhotoUrl,
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (!globalSnap.exists || existingSchoolId.isEmpty) {
+      batch.set(globalUserRef, globalCreatePayload, SetOptions(merge: true));
+    } else {
+      batch.set(globalUserRef, globalUpdatePayload, SetOptions(merge: true));
+    }
+
+    final membershipCreatePayload = {
+      'displayName': safeDisplayName ?? 'Familia',
+      'photoUrl': safePhotoUrl,
+      'role': 'parent',
+      'children': const [],
+      'classIds': const [],
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    final membershipUpdatePayload = {
+      'displayName': safeDisplayName ?? 'Familia',
+      'photoUrl': safePhotoUrl,
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (!membershipSnap.exists) {
+      batch.set(
+        membershipRef,
+        membershipCreatePayload,
+        SetOptions(merge: true),
+      );
+    } else {
+      batch.set(
+        membershipRef,
+        membershipUpdatePayload,
+        SetOptions(merge: true),
+      );
+    }
+
+    try {
+      await batch.commit();
+      return;
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') rethrow;
+    }
+
+    if (!globalSnap.exists || existingSchoolId.isEmpty) {
+      await globalUserRef.set(globalCreatePayload, SetOptions(merge: true));
+    } else {
+      await globalUserRef.set(globalUpdatePayload, SetOptions(merge: true));
+    }
+
+    if (!membershipSnap.exists) {
+      await membershipRef.set(membershipCreatePayload, SetOptions(merge: true));
+    } else {
+      await membershipRef.set(membershipUpdatePayload, SetOptions(merge: true));
+    }
   }
 
   Future<RootSchoolsPage> listSchoolsForRoot({

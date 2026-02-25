@@ -29,8 +29,25 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(uid);
     }
 
+    function globalSchoolMatches(schoolId) {
+      return signedIn()
+        && exists(globalUserDoc(request.auth.uid))
+        && get(globalUserDoc(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    function globalSchoolMatchesAfter(uid, schoolId) {
+      return (
+          existsAfter(globalUserDoc(uid))
+          && getAfter(globalUserDoc(uid)).data.schoolId == schoolId
+        )
+        || (
+          exists(globalUserDoc(uid))
+          && get(globalUserDoc(uid)).data.schoolId == schoolId
+        );
+    }
+
     function inSchool(schoolId) {
-      return signedIn() && exists(schoolUserDoc(schoolId));
+      return signedIn() && (exists(schoolUserDoc(schoolId)) || globalSchoolMatches(schoolId));
     }
 
     function myRole(schoolId) {
@@ -152,9 +169,6 @@ service cloud.firestore {
           (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(globalUserOnboardingInitKeys())
             && isBlankString(resource.data.schoolId)
-            && isBlankString(resource.data.schoolName)
-            && isBlankString(resource.data.schoolLocalidad)
-            && isBlankString(resource.data.schoolProvincia)
             && schoolSnapshotMatchesCatalog()
           )
         )
@@ -197,7 +211,7 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && request.resource.data.lastActiveAt is timestamp
         && request.resource.data.updatedAt is timestamp
-        && getAfter(globalUserDoc(uid)).data.schoolId == schoolId;
+        && globalSchoolMatchesAfter(uid, schoolId);
     }
 
     function isSafeSelfUserUpdate() {

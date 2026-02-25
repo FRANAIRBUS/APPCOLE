@@ -80,6 +80,14 @@ Future<bool> _ensureSchoolMembership({
     return false;
   }
 
+  final globalUserRef = firestore.collection('users').doc(user.uid);
+  final globalSnap = await globalUserRef.get();
+  final existingSchoolId =
+      (globalSnap.data()?['schoolId'] as String? ?? '').trim();
+  if (existingSchoolId.isNotEmpty && existingSchoolId != canonicalSchoolId) {
+    return false;
+  }
+
   final membershipRef = firestore
       .collection('schools')
       .doc(canonicalSchoolId)
@@ -88,17 +96,19 @@ Future<bool> _ensureSchoolMembership({
   final membershipSnap = await membershipRef.get();
   if (membershipSnap.exists) {
     try {
-      await firestore.collection('users').doc(user.uid).set(
-        {
+      final payload = <String, dynamic>{
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (existingSchoolId.isEmpty) {
+        payload.addAll({
           'schoolId': canonicalSchoolId,
           'schoolName': rawSchoolName,
           'schoolLocalidad': rawSchoolLocalidad,
           'schoolProvincia': rawSchoolProvincia,
-          'lastActiveAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+        });
+      }
+      await globalUserRef.set(payload, SetOptions(merge: true));
     } catch (_) {}
     return true;
   }
@@ -107,39 +117,62 @@ Future<bool> _ensureSchoolMembership({
       ? user.displayName!.trim()
       : ((user.email ?? '').trim().isNotEmpty ? user.email!.trim() : 'Familia');
   final photoUrl = (user.photoURL ?? '').trim();
+  final userCreatePayload = <String, dynamic>{
+    'displayName': fallbackName,
+    'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+    'lastActiveAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+    'schoolId': canonicalSchoolId,
+    'schoolName': rawSchoolName,
+    'schoolLocalidad': rawSchoolLocalidad,
+    'schoolProvincia': rawSchoolProvincia,
+  };
+  final userUpdatePayload = <String, dynamic>{
+    'displayName': fallbackName,
+    'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+    'lastActiveAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  };
+  final membershipCreatePayload = {
+    'displayName': fallbackName,
+    'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+    'role': 'parent',
+    'children': const [],
+    'classIds': const [],
+    'createdAt': FieldValue.serverTimestamp(),
+    'lastActiveAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
+  };
 
   try {
     final batch = firestore.batch();
     batch.set(
-      firestore.collection('users').doc(user.uid),
-      {
-        'schoolId': canonicalSchoolId,
-        'schoolName': rawSchoolName,
-        'schoolLocalidad': rawSchoolLocalidad,
-        'schoolProvincia': rawSchoolProvincia,
-        'displayName': fallbackName,
-        'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
+      globalUserRef,
+      existingSchoolId.isEmpty ? userCreatePayload : userUpdatePayload,
       SetOptions(merge: true),
     );
     batch.set(
       membershipRef,
-      {
-        'displayName': fallbackName,
-        'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-        'role': 'parent',
-        'children': const [],
-        'classIds': const [],
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
+      membershipCreatePayload,
       SetOptions(merge: true),
     );
     await batch.commit();
     return true;
+  } on FirebaseException catch (e) {
+    if (e.code != 'permission-denied') return false;
+    try {
+      await globalUserRef.set(
+        existingSchoolId.isEmpty ? userCreatePayload : userUpdatePayload,
+        SetOptions(merge: true),
+      );
+      await membershipRef.set(
+        membershipCreatePayload,
+        SetOptions(merge: true),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   } catch (_) {
     return false;
   }
