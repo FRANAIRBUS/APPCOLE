@@ -32,11 +32,55 @@ Future<String?> _resolveLegacySchoolId(FirebaseFirestore firestore, String uid) 
   return match.schoolId;
 }
 
-Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, String uid) async* {
+Future<bool> _ensureSchoolMembership({
+  required FirebaseFirestore firestore,
+  required User user,
+  required String schoolId,
+}) async {
+  final membershipRef = firestore.collection('schools').doc(schoolId).collection('users').doc(user.uid);
+  final membershipSnap = await membershipRef.get();
+  if (membershipSnap.exists) return true;
+
+  final fallbackName = (user.displayName ?? '').trim().isNotEmpty
+      ? user.displayName!.trim()
+      : ((user.email ?? '').trim().isNotEmpty ? user.email!.trim() : 'Familia');
+  final photoUrl = (user.photoURL ?? '').trim();
+
+  try {
+    await membershipRef.set(
+      {
+        'displayName': fallbackName,
+        'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+        'role': 'parent',
+        'children': const [],
+        'classIds': const [],
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, User user) async* {
+  final uid = user.uid;
   String? lastResolvedSchoolId;
   await for (final userSnap in firestore.collection('users').doc(uid).snapshots()) {
     final schoolId = (userSnap.data()?['schoolId'] as String?)?.trim();
     if (schoolId != null && schoolId.isNotEmpty) {
+      final hasMembership = await _ensureSchoolMembership(
+        firestore: firestore,
+        user: user,
+        schoolId: schoolId,
+      );
+      if (!hasMembership) {
+        yield lastResolvedSchoolId;
+        continue;
+      }
       lastResolvedSchoolId = schoolId;
       yield schoolId;
       continue;
@@ -57,7 +101,7 @@ final schoolIdProvider = StreamProvider<String?>((ref) {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return Stream.value(null);
 
-  return _resolveSchoolIdStream(ref.read(firestoreProvider), user.uid);
+  return _resolveSchoolIdStream(ref.read(firestoreProvider), user);
 });
 
 final isRootClaimProvider = StreamProvider<bool>((ref) {
@@ -76,6 +120,18 @@ final globalUserProvider = StreamProvider<Map<String, dynamic>?>((ref) {
       .read(firestoreProvider)
       .collection('users')
       .doc(user.uid)
+      .snapshots()
+      .map((snap) => snap.data());
+});
+
+final schoolCatalogProvider =
+    StreamProvider.family<Map<String, dynamic>?, String>((ref, schoolId) {
+  final trimmed = schoolId.trim();
+  if (trimmed.isEmpty) return Stream.value(null);
+  return ref
+      .read(firestoreProvider)
+      .collection('colegios')
+      .doc(trimmed)
       .snapshots()
       .map((snap) => snap.data());
 });

@@ -181,10 +181,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
     final globalUser = ref.watch(globalUserProvider).valueOrNull;
+    final catalogSchool = schoolId == null
+        ? null
+        : ref.watch(schoolCatalogProvider(schoolId)).valueOrNull;
     final isRoot = ref.watch(isRootClaimProvider).valueOrNull ?? false;
     final email = user?.email ?? '';
     final uid = user?.uid ?? '';
     final schoolName = (globalUser?['schoolName'] as String? ?? '').trim();
+    final catalogSchoolName = (catalogSchool?['nombre'] as String? ?? '').trim();
+    final resolvedSchoolName = schoolName.isNotEmpty ? schoolName : catalogSchoolName;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -208,8 +213,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(
                   schoolId == null
                       ? 'Colegio: Pendiente de vinculación'
-                      : (schoolName.isNotEmpty
-                          ? 'Colegio: $schoolName ($schoolId)'
+                      : (resolvedSchoolName.isNotEmpty
+                          ? 'Colegio: $resolvedSchoolName ($schoolId)'
                           : 'Colegio: $schoolId'),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
