@@ -360,6 +360,11 @@ exports.getOrCreateChat = onCall(async (request) => {
         createdAt: FieldValue.serverTimestamp(),
         lastMessage: '',
         lastMessageAt: FieldValue.serverTimestamp(),
+        lastMessageSenderUid: '',
+        lastReadAt: {
+          [participants[0]]: FieldValue.serverTimestamp(),
+          [participants[1]]: FieldValue.serverTimestamp(),
+        },
       });
     }
   });
@@ -404,6 +409,8 @@ exports.sendMessage = onCall(async (request) => {
     tx.update(chatRef, {
       lastMessage: text,
       lastMessageAt: FieldValue.serverTimestamp(),
+      lastMessageSenderUid: uid,
+      [`lastReadAt.${uid}`]: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
   });
@@ -445,6 +452,38 @@ exports.sendMessage = onCall(async (request) => {
   } catch (e) {
     // swallow
   }
+
+  return {ok: true};
+});
+
+exports.markChatRead = onCall(async (request) => {
+  const uid = assertAuth(request);
+  const chatId = String(request.data?.chatId || '').trim();
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
+
+  if (!chatId) throw new HttpsError('invalid-argument', 'chatId is required');
+
+  const schoolId = (await resolveSchoolIdForUid(uid)) || providedSchoolId;
+  if (!schoolId) throw new HttpsError('failed-precondition', 'No school membership found');
+  assertSameSchool(providedSchoolId, schoolId);
+
+  const chatRef = db.doc(`schools/${schoolId}/chats/${chatId}`);
+  const chatSnap = await chatRef.get();
+  if (!chatSnap.exists) throw new HttpsError('not-found', 'Chat not found');
+
+  const chat = chatSnap.data() || {};
+  const participants = Array.isArray(chat.participants) ? chat.participants.map(String) : [];
+  if (!participants.includes(uid)) {
+    throw new HttpsError('permission-denied', 'Not a participant');
+  }
+
+  await chatRef.set(
+    {
+      lastReadAt: {[uid]: FieldValue.serverTimestamp()},
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    {merge: true},
+  );
 
   return {ok: true};
 });

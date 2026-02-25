@@ -29,6 +29,14 @@ class ChatService {
       'text': text,
     });
   }
+
+  Future<void> markChatRead({String? schoolId, required String chatId}) async {
+    final callable = _functions.httpsCallable('markChatRead');
+    await callable.call<Map<String, dynamic>>({
+      if (schoolId != null && schoolId.trim().isNotEmpty) 'schoolId': schoolId.trim(),
+      'chatId': chatId,
+    });
+  }
 }
 
 final chatServiceProvider = Provider<ChatService>((ref) => ChatService(FirebaseFunctions.instance));

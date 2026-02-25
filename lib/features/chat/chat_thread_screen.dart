@@ -19,6 +19,8 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   bool _sending = false;
+  bool _markingRead = false;
+  DateTime _lastMarkedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   String _hourLabel(Timestamp? ts) {
     if (ts == null) return '';
@@ -71,6 +73,25 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     }
   }
 
+  Future<void> _markAsRead({required String schoolId}) async {
+    if (_markingRead) return;
+    final now = DateTime.now();
+    if (now.difference(_lastMarkedAt).inMilliseconds < 1500) return;
+
+    _markingRead = true;
+    try {
+      await ref.read(chatServiceProvider).markChatRead(
+            schoolId: schoolId,
+            chatId: widget.chatId,
+          );
+      _lastMarkedAt = now;
+    } catch (_) {
+      // best-effort
+    } finally {
+      _markingRead = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final schoolId = ref.watch(schoolIdProvider).valueOrNull;
@@ -78,6 +99,11 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     if (schoolId == null || uid == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _markAsRead(schoolId: schoolId);
+    });
 
     final chatRef = FirebaseFirestore.instance.doc('schools/$schoolId/chats/${widget.chatId}');
     final chatStream = chatRef.snapshots();

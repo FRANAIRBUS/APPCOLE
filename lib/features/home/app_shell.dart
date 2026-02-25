@@ -1,7 +1,44 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AppShell extends StatelessWidget {
+import '../../features/auth/session_provider.dart';
+
+final unreadChatsCountProvider = StreamProvider<int>((ref) {
+  final schoolId = ref.watch(schoolIdProvider).valueOrNull;
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+
+  if (schoolId == null || uid == null) {
+    return Stream<int>.value(0);
+  }
+
+  return FirebaseFirestore.instance
+      .collection('schools/$schoolId/chats')
+      .where('participants', arrayContains: uid)
+      .snapshots()
+      .map((snapshot) {
+    int unread = 0;
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final lastSender = (data['lastMessageSenderUid'] as String?)?.trim() ?? '';
+      if (lastSender.isEmpty || lastSender == uid) continue;
+
+      final lastMessageAt = data['lastMessageAt'];
+      final lastMessageMs = lastMessageAt is Timestamp ? lastMessageAt.millisecondsSinceEpoch : 0;
+      if (lastMessageMs <= 0) continue;
+
+      final lastReadMap = data['lastReadAt'];
+      final myRead = (lastReadMap is Map<String, dynamic>) ? lastReadMap[uid] : null;
+      final myReadMs = myRead is Timestamp ? myRead.millisecondsSinceEpoch : 0;
+      if (myReadMs < lastMessageMs) unread++;
+    }
+    return unread;
+  });
+});
+
+class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
@@ -23,8 +60,9 @@ class AppShell extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final current = navigationShell.currentIndex.clamp(0, _titles.length - 1);
+    final unreadChats = ref.watch(unreadChatsCountProvider).valueOrNull ?? 0;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
@@ -53,13 +91,19 @@ class AppShell extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: (index) => navigationShell.goBranch(index),
-        destinations: const [
+        destinations: [
           NavigationDestination(
               icon: Icon(Icons.swap_horiz), label: 'Busco'),
           NavigationDestination(icon: Icon(Icons.event), label: 'Padres'),
           NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
           NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline), label: 'Chat'),
+            icon: Badge(
+              isLabelVisible: unreadChats > 0,
+              label: Text(unreadChats > 99 ? '99+' : '$unreadChats'),
+              child: const Icon(Icons.chat_bubble_outline),
+            ),
+            label: 'Chat',
+          ),
           NavigationDestination(
               icon: Icon(Icons.person_outline), label: 'Perfil'),
         ],
