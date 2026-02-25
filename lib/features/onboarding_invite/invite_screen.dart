@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/school.dart';
 import '../auth/session_provider.dart';
@@ -37,6 +38,11 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   bool _loadingSchools = false;
   bool _saving = false;
   String? _error;
+
+  bool _processedLink = false;
+  School? _invitedSchool;
+  String? _invitedSchoolId;
+  String? _referrerUid;
 
   @override
   void dispose() {
@@ -204,9 +210,51 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Deep-link: /invite?schoolId=...&referrerUid=...
+    if (!_processedLink) {
+      _processedLink = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final qp = GoRouterState.of(context).uri.queryParameters;
+        final schoolId = (qp['schoolId'] ?? '').trim();
+        final referrerUid = (qp['referrerUid'] ?? '').trim();
+        if (schoolId.isEmpty) return;
+
+        setState(() {
+          _invitedSchoolId = schoolId;
+          _referrerUid = referrerUid.isEmpty ? null : referrerUid;
+        });
+
+        try {
+          final school = await ref.read(schoolsRepositoryProvider).getActiveSchoolById(schoolId);
+          if (!mounted) return;
+          if (school == null) {
+            setState(() => _error = 'El colegio de la invitación no existe o está inactivo.');
+            return;
+          }
+          setState(() {
+            _invitedSchool = school;
+            // Preselección automática; el usuario puede cambiarlo.
+            _selectedProvince = school.provincia;
+            _selectedLocality = school.localidad;
+            _selectedSchool = school;
+            _provinceCtrl.text = school.provincia;
+            _localityCtrl.text = school.localidad;
+            _schoolNameCtrl.text = school.nombre;
+          });
+        } catch (e) {
+          if (!mounted) return;
+          setState(() => _error = e.toString());
+        }
+      });
+    }
+
     final canSearchLocality = _selectedProvince != null;
     final canSearchSchool = _selectedProvince != null && _selectedLocality != null;
     final canContinue = _selectedSchool != null && !_saving;
+
+    final user = FirebaseAuth.instance.currentUser;
+    final mustLogin = user == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -229,6 +277,72 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (_invitedSchool != null)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Invitación al colegio',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${_invitedSchool!.nombre}\n${_invitedSchool!.localidad}, ${_invitedSchool!.provincia} · ${_invitedSchool!.codigoCentro}',
+                        ),
+                        const SizedBox(height: 12),
+                        if (mustLogin)
+                          FilledButton.icon(
+                            onPressed: () {
+                              final uri = Uri(
+                                path: '/login',
+                                queryParameters: {
+                                  if (_invitedSchoolId != null) 'schoolId': _invitedSchoolId!,
+                                  if (_referrerUid != null) 'referrerUid': _referrerUid!,
+                                  'redirect': '/invite',
+                                },
+                              );
+                              context.go(uri.toString());
+                            },
+                            icon: const Icon(Icons.login),
+                            label: const Text('Inicia sesión para aceptar'),
+                          )
+                        else
+                          FilledButton.icon(
+                            onPressed: canContinue ? _saveSelection : null,
+                            icon: const Icon(Icons.check_circle_outline),
+                            label: const Text('Usar este colegio'),
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Puedes usar el colegio de la invitación o buscar otro en el catálogo.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (mustLogin)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Inicia sesión para seleccionar y guardar tu colegio. Si has abierto un enlace de invitación, el colegio se preseleccionará automáticamente tras el login.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -421,10 +535,12 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
                       ],
                       const SizedBox(height: 14),
                       FilledButton(
-                        onPressed: canContinue ? _saveSelection : null,
-                        child: Text(_saving
-                            ? 'Guardando...'
-                            : 'Continuar con este colegio'),
+                        onPressed: mustLogin ? null : (canContinue ? _saveSelection : null),
+                        child: Text(
+                          mustLogin
+                              ? 'Inicia sesión para continuar'
+                              : (_saving ? 'Guardando...' : 'Continuar con este colegio'),
+                        ),
                       ),
                     ],
                   ),

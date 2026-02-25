@@ -169,6 +169,7 @@ class SchoolsRepository {
     }
 
     final batch = _firestore.batch();
+    final now = Timestamp.now();
     final safeDisplayName =
         (displayName ?? '').trim().isEmpty ? null : displayName!.trim();
     final safePhotoUrl =
@@ -181,9 +182,11 @@ class SchoolsRepository {
       'schoolProvincia': rawSchoolProvincia,
       'displayName': safeDisplayName,
       'photoUrl': safePhotoUrl,
-      'createdAt': FieldValue.serverTimestamp(),
-      'lastActiveAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      // IMPORTANT: Firestore security rules validate these fields as timestamps.
+      // FieldValue.serverTimestamp() is not a timestamp at rules-eval time -> permission-denied.
+      'createdAt': now,
+      'lastActiveAt': now,
+      'updatedAt': now,
     };
     final globalUpdatePayload = {
       'schoolId': schoolId,
@@ -192,8 +195,8 @@ class SchoolsRepository {
       'schoolProvincia': rawSchoolProvincia,
       'displayName': safeDisplayName,
       'photoUrl': safePhotoUrl,
-      'lastActiveAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'lastActiveAt': now,
+      'updatedAt': now,
     };
 
     if (!globalSnap.exists) {
@@ -204,8 +207,8 @@ class SchoolsRepository {
       batch.update(globalUserRef, {
         'displayName': safeDisplayName,
         'photoUrl': safePhotoUrl,
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'lastActiveAt': now,
+        'updatedAt': now,
       });
     }
 
@@ -215,15 +218,15 @@ class SchoolsRepository {
       'role': 'parent',
       'children': const [],
       'classIds': const [],
-      'createdAt': FieldValue.serverTimestamp(),
-      'lastActiveAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': now,
+      'lastActiveAt': now,
+      'updatedAt': now,
     };
     final membershipUpdatePayload = {
       'displayName': safeDisplayName ?? 'Familia',
       'photoUrl': safePhotoUrl,
-      'lastActiveAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'lastActiveAt': now,
+      'updatedAt': now,
     };
 
     if (!membershipSnap.exists) {
@@ -247,8 +250,8 @@ class SchoolsRepository {
       await globalUserRef.update({
         'displayName': safeDisplayName,
         'photoUrl': safePhotoUrl,
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'lastActiveAt': now,
+        'updatedAt': now,
       });
     }
 
@@ -257,6 +260,14 @@ class SchoolsRepository {
     } else {
       await membershipRef.update(membershipUpdatePayload);
     }
+  }
+
+  Future<School?> getActiveSchoolById(String schoolId) async {
+    final doc = await _schools.doc(schoolId.trim()).get();
+    if (!doc.exists) return null;
+    final school = School.fromDoc(doc);
+    if (!school.activo) return null;
+    return school;
   }
 
   Future<RootSchoolsPage> listSchoolsForRoot({
@@ -376,10 +387,11 @@ class SchoolsRepository {
     required bool active,
     required String updatedBy,
   }) async {
+    final now = Timestamp.now();
     await _schools.doc(codigoCentro.trim()).set(
       {
         'activo': active,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': now,
         'updatedBy': updatedBy,
       },
       SetOptions(merge: true),
@@ -408,7 +420,7 @@ class SchoolsRepository {
       'localidad_normalizada': normalizeForSearch(localidad),
       'provincia_normalizada': normalizeForSearch(provincia),
       'activo': input.activo,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.now(),
       'updatedBy': updatedBy,
     };
   }

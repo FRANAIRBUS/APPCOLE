@@ -96,19 +96,20 @@ Future<bool> _ensureSchoolMembership({
   final membershipSnap = await membershipRef.get();
   if (membershipSnap.exists) {
     try {
+      final now = Timestamp.now();
       if (existingSchoolId.isEmpty) {
         await globalUserRef.update({
           'schoolId': canonicalSchoolId,
           'schoolName': rawSchoolName,
           'schoolLocalidad': rawSchoolLocalidad,
           'schoolProvincia': rawSchoolProvincia,
-          'lastActiveAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'lastActiveAt': now,
+          'updatedAt': now,
         });
       } else {
         await globalUserRef.update({
-          'lastActiveAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'lastActiveAt': now,
+          'updatedAt': now,
         });
       }
     } catch (_) {}
@@ -119,6 +120,7 @@ Future<bool> _ensureSchoolMembership({
       ? user.displayName!.trim()
       : ((user.email ?? '').trim().isNotEmpty ? user.email!.trim() : 'Familia');
   final photoUrl = (user.photoURL ?? '').trim();
+  final now = Timestamp.now();
   final userCreatePayload = <String, dynamic>{
     'schoolId': canonicalSchoolId,
     'schoolName': rawSchoolName,
@@ -126,9 +128,10 @@ Future<bool> _ensureSchoolMembership({
     'schoolProvincia': rawSchoolProvincia,
     'displayName': fallbackName,
     'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-    'createdAt': FieldValue.serverTimestamp(),
-    'lastActiveAt': FieldValue.serverTimestamp(),
-    'updatedAt': FieldValue.serverTimestamp(),
+    // IMPORTANT: rules expect timestamps; serverTimestamp sentinel fails at evaluation time.
+    'createdAt': now,
+    'lastActiveAt': now,
+    'updatedAt': now,
   };
   final userUpdatePayload = <String, dynamic>{
     'schoolId': canonicalSchoolId,
@@ -137,8 +140,8 @@ Future<bool> _ensureSchoolMembership({
     'schoolProvincia': rawSchoolProvincia,
     'displayName': fallbackName,
     'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-    'lastActiveAt': FieldValue.serverTimestamp(),
-    'updatedAt': FieldValue.serverTimestamp(),
+    'lastActiveAt': now,
+    'updatedAt': now,
   };
   final membershipCreatePayload = {
     'displayName': fallbackName,
@@ -146,9 +149,9 @@ Future<bool> _ensureSchoolMembership({
     'role': 'parent',
     'children': const [],
     'classIds': const [],
-    'createdAt': FieldValue.serverTimestamp(),
-    'lastActiveAt': FieldValue.serverTimestamp(),
-    'updatedAt': FieldValue.serverTimestamp(),
+    'createdAt': now,
+    'lastActiveAt': now,
+    'updatedAt': now,
   };
 
   try {
@@ -161,8 +164,8 @@ Future<bool> _ensureSchoolMembership({
       batch.update(globalUserRef, {
         'displayName': fallbackName,
         'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'lastActiveAt': now,
+        'updatedAt': now,
       });
     }
     batch.set(membershipRef, membershipCreatePayload);
@@ -179,8 +182,8 @@ Future<bool> _ensureSchoolMembership({
         await globalUserRef.update({
           'displayName': fallbackName,
           'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-          'lastActiveAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'lastActiveAt': now,
+          'updatedAt': now,
         });
       }
       await membershipRef.set(membershipCreatePayload);
@@ -225,14 +228,15 @@ Stream<String?> _resolveSchoolIdStream(
               rawSchoolLocalidad.trim().isNotEmpty &&
               rawSchoolProvincia.trim().isNotEmpty) {
             try {
+              final now = Timestamp.now();
               await firestore.collection('users').doc(uid).set(
                 {
                   'schoolId': canonicalSchoolId,
                   'schoolName': rawSchoolName,
                   'schoolLocalidad': rawSchoolLocalidad,
                   'schoolProvincia': rawSchoolProvincia,
-                  'lastActiveAt': FieldValue.serverTimestamp(),
-                  'updatedAt': FieldValue.serverTimestamp(),
+                  'lastActiveAt': now,
+                  'updatedAt': now,
                 },
                 SetOptions(merge: true),
               );

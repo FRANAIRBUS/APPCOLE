@@ -39,6 +39,7 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
 
     setState(() => _creating = true);
     try {
+      final now = Timestamp.now();
       await FirebaseFirestore.instance.collection('schools/$schoolId/posts').add({
         'module': 'busco_ofrezco',
         'type': result.type,
@@ -46,7 +47,8 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
         'title': result.title,
         'body': result.body,
         'authorUid': uid,
-        'createdAt': FieldValue.serverTimestamp(),
+        // Rules validate createdAt as timestamp.
+        'createdAt': now,
         'status': 'active',
         'reportsCount': 0,
       });

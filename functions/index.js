@@ -86,6 +86,98 @@ function mergeChildren(existingChildren, newChild) {
   return normalized;
 }
 
+
+exports.onboardSelectSchool = onCall(async (request) => {
+  const uid = assertAuth(request);
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
+  if (!providedSchoolId) {
+    throw new HttpsError('invalid-argument', 'schoolId is required');
+  }
+
+  const catalogRef = db.doc(`colegios/${providedSchoolId}`);
+  const catalogSnap = await catalogRef.get();
+  if (!catalogSnap.exists) {
+    throw new HttpsError('not-found', 'Colegio no encontrado');
+  }
+
+  const catalog = catalogSnap.data() || {};
+  if (catalog.activo !== true) {
+    throw new HttpsError('failed-precondition', 'Colegio inactivo');
+  }
+
+  const schoolName = String(catalog.nombre || '').trim();
+  const schoolLocalidad = String(catalog.localidad || '').trim();
+  const schoolProvincia = String(catalog.provincia || '').trim();
+  if (!schoolName || !schoolLocalidad || !schoolProvincia) {
+    throw new HttpsError('failed-precondition', 'Catálogo del colegio incompleto');
+  }
+
+  const requestedDisplayName = String(request.data?.displayName || '').trim();
+  const tokenDisplayName = String(request.auth?.token?.name || '').trim();
+  const tokenEmail = String(request.auth?.token?.email || '').trim();
+  const displayName =
+    requestedDisplayName || tokenDisplayName || tokenEmail || 'Familia';
+
+  const requestedPhotoUrl = String(request.data?.photoUrl || '').trim();
+  const tokenPhotoUrl = String(request.auth?.token?.picture || '').trim();
+  const photoUrl = (requestedPhotoUrl || tokenPhotoUrl || '').trim() || null;
+
+  const globalRef = db.doc(`users/${uid}`);
+  const membershipRef = db.doc(`schools/${providedSchoolId}/users/${uid}`);
+
+  await db.runTransaction(async (tx) => {
+    const [globalSnap, membershipSnap] = await Promise.all([
+      tx.get(globalRef),
+      tx.get(membershipRef),
+    ]);
+
+    const existing = globalSnap.data() || {};
+    const existingSchoolId = String(existing.schoolId || '').trim();
+    if (existingSchoolId && existingSchoolId !== providedSchoolId) {
+      throw new HttpsError('failed-precondition', 'Esta cuenta ya pertenece a otro colegio');
+    }
+
+    const now = FieldValue.serverTimestamp();
+
+    tx.set(
+      globalRef,
+      {
+        schoolId: providedSchoolId,
+        schoolName,
+        schoolLocalidad,
+        schoolProvincia,
+        displayName,
+        photoUrl,
+        lastActiveAt: now,
+        updatedAt: now,
+        ...(globalSnap.exists ? {} : {createdAt: now}),
+      },
+      {merge: true},
+    );
+
+    const membership = membershipSnap.data() || {};
+    const children = Array.isArray(membership.children) ? membership.children : [];
+    const classIds = Array.isArray(membership.classIds) ? membership.classIds : [];
+
+    tx.set(
+      membershipRef,
+      {
+        displayName,
+        photoUrl,
+        role: 'parent',
+        children,
+        classIds,
+        lastActiveAt: now,
+        updatedAt: now,
+        ...(membershipSnap.exists ? {} : {createdAt: now}),
+      },
+      {merge: true},
+    );
+  });
+
+  return {ok: true, schoolId: providedSchoolId};
+});
+
 exports.redeemInviteCode = onCall(async (request) => {
   const uid = assertAuth(request);
   const code = String(request.data?.code || '').trim().toUpperCase();

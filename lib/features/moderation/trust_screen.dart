@@ -36,12 +36,13 @@ class _TrustScreenState extends ConsumerState<TrustScreen> {
 
     setState(() => _sending = true);
     try {
+      final now = Timestamp.now();
       await FirebaseFirestore.instance.collection('schools/$schoolId/reports').add({
         'targetType': path.contains('/posts/') ? 'post' : 'other',
         'targetPath': path,
         'reason': reason,
         'reporterUid': FirebaseAuth.instance.currentUser?.uid,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': now,
         'status': 'open',
       });
       if (!mounted) return;

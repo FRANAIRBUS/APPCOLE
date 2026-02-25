@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../features/auth/session_provider.dart';
 import '../../services/chat_service.dart';
@@ -21,13 +22,15 @@ class MatchingScreen extends ConsumerWidget {
 
     Future<void> shareInviteCard() async {
       try {
-        await ref.read(inviteShareServiceProvider).shareInviteCard(
+        final card = await ref.read(inviteShareServiceProvider).shareInviteCard(
               schoolId: schoolId,
               source: 'matching',
             );
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tarjeta copiada. Compártela por WhatsApp o email.')),
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) => _InviteCardSheet(card: card),
         );
       } catch (e) {
         if (!context.mounted) return;
@@ -196,6 +199,76 @@ class MatchingScreen extends ConsumerWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _InviteCardSheet extends StatelessWidget {
+  const _InviteCardSheet({required this.card});
+
+  final String card;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Tarjeta de invitación',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: SelectableText(card),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await Share.share(card);
+                    },
+                    icon: const Icon(Icons.share_outlined),
+                    label: const Text('Compartir'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Listo'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'La tarjeta ya está copiada en el portapapeles. Puedes pegarla en WhatsApp, email o SMS.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

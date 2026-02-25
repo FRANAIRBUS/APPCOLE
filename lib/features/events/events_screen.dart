@@ -35,6 +35,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
     setState(() => _creating = true);
     try {
+      final now = Timestamp.now();
       await FirebaseFirestore.instance.collection('schools/$schoolId/events').add({
         'title': draft.title,
         'description': draft.description,
@@ -42,7 +43,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         'place': draft.place,
         'category': draft.category,
         'organizerUid': uid,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': now,
         'status': 'active',
         'reportsCount': 0,
       });

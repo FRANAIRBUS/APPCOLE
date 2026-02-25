@@ -84,7 +84,7 @@ class _HeroPanel extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _Pill(icon: Icons.lock_outline, label: 'Privada por invitación'),
+              _Pill(icon: Icons.lock_outline, label: 'Privada por colegio'),
               _Pill(
                   icon: Icons.domain_verification_outlined,
                   label: 'Multi-colegio aislado'),
@@ -106,7 +106,7 @@ class _HeroPanel extends StatelessWidget {
           const _StepRow(index: 1, text: 'Inicia sesión o crea tu cuenta.'),
           const SizedBox(height: 8),
           const _StepRow(
-              index: 2, text: 'Introduce el código de invitación del colegio.'),
+              index: 2, text: 'Elige tu colegio del catálogo.'),
           const SizedBox(height: 8),
           const _StepRow(
               index: 3,
@@ -210,7 +210,7 @@ class _WelcomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Accede por invitación. Sin teléfonos visibles. Sin fotos de menores. Chat interno y módulos útiles para el día a día.',
+            'Accede eligiendo tu colegio. Sin teléfonos visibles. Sin fotos de menores. Chat interno y módulos útiles para el día a día.',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
@@ -280,7 +280,7 @@ class _WelcomeContent extends StatelessWidget {
                         .titleMedium
                         ?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 10),
-                const _Bullet(text: 'Acceso solo por invitación del colegio.'),
+                const _Bullet(text: 'Acceso solo para familias del colegio seleccionado.'),
                 const _Bullet(
                     text: 'Aislamiento estricto por schoolId (multi-colegio).'),
                 const _Bullet(
@@ -299,7 +299,7 @@ class _WelcomeContent extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Al iniciar sesión podrás introducir el código de invitación del colegio.',
+          'Al iniciar sesión podrás seleccionar tu colegio del catálogo.',
           textAlign: TextAlign.center,
           style: Theme.of(context)
               .textTheme
