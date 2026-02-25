@@ -72,17 +72,38 @@ Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, User user) a
   await for (final userSnap in firestore.collection('users').doc(uid).snapshots()) {
     final schoolId = (userSnap.data()?['schoolId'] as String?)?.trim();
     if (schoolId != null && schoolId.isNotEmpty) {
-      final hasMembership = await _ensureSchoolMembership(
+      final existingMembership = await firestore
+          .collection('schools')
+          .doc(schoolId)
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (existingMembership.exists) {
+        lastResolvedSchoolId = schoolId;
+        yield schoolId;
+        continue;
+      }
+
+      final legacySchoolId = await _resolveLegacySchoolId(firestore, uid);
+      if (legacySchoolId != null && legacySchoolId.isNotEmpty) {
+        lastResolvedSchoolId = legacySchoolId;
+        yield legacySchoolId;
+        continue;
+      }
+
+      final repairedMembership = await _ensureSchoolMembership(
         firestore: firestore,
         user: user,
         schoolId: schoolId,
       );
-      if (!hasMembership) {
-        yield lastResolvedSchoolId;
+      if (repairedMembership) {
+        lastResolvedSchoolId = schoolId;
+        yield schoolId;
         continue;
       }
-      lastResolvedSchoolId = schoolId;
-      yield schoolId;
+
+      yield lastResolvedSchoolId;
       continue;
     }
 
@@ -135,6 +156,19 @@ final schoolCatalogProvider =
       .snapshots()
       .map((snap) => snap.data());
 });
+
+    final schoolCatalogByCodeProvider =
+        StreamProvider.family<Map<String, dynamic>?, String>((ref, schoolId) {
+      final trimmed = schoolId.trim();
+      if (trimmed.isEmpty) return Stream.value(null);
+      return ref
+      .read(firestoreProvider)
+      .collection('colegios')
+      .where('codigoCentro', isEqualTo: trimmed)
+      .limit(1)
+      .snapshots()
+      .map((snap) => snap.docs.isEmpty ? null : snap.docs.first.data());
+    });
 
 enum SessionPhase { unauthenticated, needsInvite, ready }
 

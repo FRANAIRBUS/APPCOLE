@@ -41,6 +41,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _editProfile(String schoolId, String uid) async {
     final userRef = FirebaseFirestore.instance.doc('schools/$schoolId/users/$uid');
     final snap = await userRef.get();
+    final docExists = snap.exists;
     final data = snap.data() ?? <String, dynamic>{};
 
     final displayNameController = TextEditingController(
@@ -88,15 +89,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     setState(() => _busy = true);
     try {
-      await userRef.update({
+      final payload = {
         'displayName': updated.displayName,
         'children': updated.children
             .map((child) => {'name': child.name, 'classId': child.classId})
             .toList(),
         'classIds': updated.classIds,
-        'extraGroupIds': updated.extraGroupIds,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      if (docExists) {
+        await userRef.update({
+          ...payload,
+          'extraGroupIds': updated.extraGroupIds,
+        });
+      } else {
+        final currentUser = FirebaseAuth.instance.currentUser;
+        await userRef.set(
+          {
+            ...payload,
+            'photoUrl': (currentUser?.photoURL ?? '').trim().isEmpty
+                ? null
+                : currentUser!.photoURL!.trim(),
+            'role': 'parent',
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastActiveAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+        if (updated.extraGroupIds.isNotEmpty) {
+          await userRef.update({
+            'extraGroupIds': updated.extraGroupIds,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
       if (!mounted) return;
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -184,12 +211,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final catalogSchool = schoolId == null
         ? null
         : ref.watch(schoolCatalogProvider(schoolId)).valueOrNull;
+    final catalogSchoolByCode = schoolId == null
+      ? null
+      : ref.watch(schoolCatalogByCodeProvider(schoolId)).valueOrNull;
     final isRoot = ref.watch(isRootClaimProvider).valueOrNull ?? false;
     final email = user?.email ?? '';
     final uid = user?.uid ?? '';
     final schoolName = (globalUser?['schoolName'] as String? ?? '').trim();
     final catalogSchoolName = (catalogSchool?['nombre'] as String? ?? '').trim();
-    final resolvedSchoolName = schoolName.isNotEmpty ? schoolName : catalogSchoolName;
+    final catalogSchoolByCodeName = (catalogSchoolByCode?['nombre'] as String? ?? '').trim();
+    final resolvedSchoolName = schoolName.isNotEmpty
+      ? schoolName
+      : (catalogSchoolName.isNotEmpty ? catalogSchoolName : catalogSchoolByCodeName);
 
     return ListView(
       padding: const EdgeInsets.all(16),
