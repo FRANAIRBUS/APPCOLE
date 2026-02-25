@@ -96,19 +96,21 @@ Future<bool> _ensureSchoolMembership({
   final membershipSnap = await membershipRef.get();
   if (membershipSnap.exists) {
     try {
-      final payload = <String, dynamic>{
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
       if (existingSchoolId.isEmpty) {
-        payload.addAll({
+        await globalUserRef.update({
           'schoolId': canonicalSchoolId,
           'schoolName': rawSchoolName,
           'schoolLocalidad': rawSchoolLocalidad,
           'schoolProvincia': rawSchoolProvincia,
+          'lastActiveAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await globalUserRef.update({
+          'lastActiveAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       }
-      await globalUserRef.set(payload, SetOptions(merge: true));
     } catch (_) {}
     return true;
   }
@@ -118,16 +120,21 @@ Future<bool> _ensureSchoolMembership({
       : ((user.email ?? '').trim().isNotEmpty ? user.email!.trim() : 'Familia');
   final photoUrl = (user.photoURL ?? '').trim();
   final userCreatePayload = <String, dynamic>{
-    'displayName': fallbackName,
-    'photoUrl': photoUrl.isEmpty ? null : photoUrl,
-    'lastActiveAt': FieldValue.serverTimestamp(),
-    'updatedAt': FieldValue.serverTimestamp(),
     'schoolId': canonicalSchoolId,
     'schoolName': rawSchoolName,
     'schoolLocalidad': rawSchoolLocalidad,
     'schoolProvincia': rawSchoolProvincia,
+    'displayName': fallbackName,
+    'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+    'createdAt': FieldValue.serverTimestamp(),
+    'lastActiveAt': FieldValue.serverTimestamp(),
+    'updatedAt': FieldValue.serverTimestamp(),
   };
   final userUpdatePayload = <String, dynamic>{
+    'schoolId': canonicalSchoolId,
+    'schoolName': rawSchoolName,
+    'schoolLocalidad': rawSchoolLocalidad,
+    'schoolProvincia': rawSchoolProvincia,
     'displayName': fallbackName,
     'photoUrl': photoUrl.isEmpty ? null : photoUrl,
     'lastActiveAt': FieldValue.serverTimestamp(),
@@ -146,29 +153,37 @@ Future<bool> _ensureSchoolMembership({
 
   try {
     final batch = firestore.batch();
-    batch.set(
-      globalUserRef,
-      existingSchoolId.isEmpty ? userCreatePayload : userUpdatePayload,
-      SetOptions(merge: true),
-    );
-    batch.set(
-      membershipRef,
-      membershipCreatePayload,
-      SetOptions(merge: true),
-    );
+    if (!globalSnap.exists) {
+      batch.set(globalUserRef, userCreatePayload);
+    } else if (existingSchoolId.isEmpty) {
+      batch.update(globalUserRef, userUpdatePayload);
+    } else {
+      batch.update(globalUserRef, {
+        'displayName': fallbackName,
+        'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    batch.set(membershipRef, membershipCreatePayload);
     await batch.commit();
     return true;
   } on FirebaseException catch (e) {
     if (e.code != 'permission-denied') return false;
     try {
-      await globalUserRef.set(
-        existingSchoolId.isEmpty ? userCreatePayload : userUpdatePayload,
-        SetOptions(merge: true),
-      );
-      await membershipRef.set(
-        membershipCreatePayload,
-        SetOptions(merge: true),
-      );
+      if (!globalSnap.exists) {
+        await globalUserRef.set(userCreatePayload);
+      } else if (existingSchoolId.isEmpty) {
+        await globalUserRef.update(userUpdatePayload);
+      } else {
+        await globalUserRef.update({
+          'displayName': fallbackName,
+          'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+          'lastActiveAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await membershipRef.set(membershipCreatePayload);
       return true;
     } catch (_) {
       return false;

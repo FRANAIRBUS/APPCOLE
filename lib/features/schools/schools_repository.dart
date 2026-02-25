@@ -181,20 +181,32 @@ class SchoolsRepository {
       'schoolProvincia': rawSchoolProvincia,
       'displayName': safeDisplayName,
       'photoUrl': safePhotoUrl,
+      'createdAt': FieldValue.serverTimestamp(),
       'lastActiveAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
     final globalUpdatePayload = {
+      'schoolId': schoolId,
+      'schoolName': rawSchoolName,
+      'schoolLocalidad': rawSchoolLocalidad,
+      'schoolProvincia': rawSchoolProvincia,
       'displayName': safeDisplayName,
       'photoUrl': safePhotoUrl,
       'lastActiveAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (!globalSnap.exists || existingSchoolId.isEmpty) {
-      batch.set(globalUserRef, globalCreatePayload, SetOptions(merge: true));
+    if (!globalSnap.exists) {
+      batch.set(globalUserRef, globalCreatePayload);
+    } else if (existingSchoolId.isEmpty) {
+      batch.update(globalUserRef, globalUpdatePayload);
     } else {
-      batch.set(globalUserRef, globalUpdatePayload, SetOptions(merge: true));
+      batch.update(globalUserRef, {
+        'displayName': safeDisplayName,
+        'photoUrl': safePhotoUrl,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
 
     final membershipCreatePayload = {
@@ -215,17 +227,9 @@ class SchoolsRepository {
     };
 
     if (!membershipSnap.exists) {
-      batch.set(
-        membershipRef,
-        membershipCreatePayload,
-        SetOptions(merge: true),
-      );
+      batch.set(membershipRef, membershipCreatePayload);
     } else {
-      batch.set(
-        membershipRef,
-        membershipUpdatePayload,
-        SetOptions(merge: true),
-      );
+      batch.update(membershipRef, membershipUpdatePayload);
     }
 
     try {
@@ -235,16 +239,23 @@ class SchoolsRepository {
       if (e.code != 'permission-denied') rethrow;
     }
 
-    if (!globalSnap.exists || existingSchoolId.isEmpty) {
-      await globalUserRef.set(globalCreatePayload, SetOptions(merge: true));
+    if (!globalSnap.exists) {
+      await globalUserRef.set(globalCreatePayload);
+    } else if (existingSchoolId.isEmpty) {
+      await globalUserRef.update(globalUpdatePayload);
     } else {
-      await globalUserRef.set(globalUpdatePayload, SetOptions(merge: true));
+      await globalUserRef.update({
+        'displayName': safeDisplayName,
+        'photoUrl': safePhotoUrl,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
 
     if (!membershipSnap.exists) {
-      await membershipRef.set(membershipCreatePayload, SetOptions(merge: true));
+      await membershipRef.set(membershipCreatePayload);
     } else {
-      await membershipRef.set(membershipUpdatePayload, SetOptions(merge: true));
+      await membershipRef.update(membershipUpdatePayload);
     }
   }
 
