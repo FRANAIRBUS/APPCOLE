@@ -14,6 +14,23 @@ class SchoolsRepository {
   DocumentReference<Map<String, dynamic>> _userRef(String uid) =>
       _firestore.collection('users').doc(uid);
 
+  Future<DocumentSnapshot<Map<String, dynamic>>> _resolveCatalogSchoolDoc(
+    School school,
+  ) async {
+    final direct = await _schools.doc(school.codigoCentro).get();
+    if (direct.exists) return direct;
+
+    final byCode = await _schools
+        .where('codigoCentro', isEqualTo: school.codigoCentro)
+        .limit(1)
+        .get();
+    if (byCode.docs.isNotEmpty) {
+      return byCode.docs.first;
+    }
+
+    throw StateError('No se encontró el colegio seleccionado en el catálogo.');
+  }
+
   Future<List<String>> searchProvinces({
     required String prefix,
     int limit = 20,
@@ -24,8 +41,7 @@ class SchoolsRepository {
         .orderBy('provincia_normalizada');
 
     if (normalized.isNotEmpty) {
-      query = query
-          .startAt([normalized]).endAt(['$normalized\uf8ff']);
+      query = query.startAt([normalized]).endAt(['$normalized\uf8ff']);
     }
 
     final snap = await query.limit(limit).get();
@@ -52,8 +68,7 @@ class SchoolsRepository {
         .orderBy('localidad_normalizada');
 
     if (normalized.isNotEmpty) {
-      query = query
-          .startAt([normalized]).endAt(['$normalized\uf8ff']);
+      query = query.startAt([normalized]).endAt(['$normalized\uf8ff']);
     }
 
     final snap = await query.limit(limit).get();
@@ -91,7 +106,8 @@ class SchoolsRepository {
 
     final broadLimit = limit < 20 ? 80 : limit * 4;
     final snap = await baseQuery.limit(broadLimit).get();
-    final tokens = normalizedName.split(' ').where((t) => t.isNotEmpty).toList();
+    final tokens =
+        normalizedName.split(' ').where((t) => t.isNotEmpty).toList();
 
     final ranked = snap.docs
         .map(School.fromDoc)
@@ -104,9 +120,7 @@ class SchoolsRepository {
             return null;
           }
 
-          final score = startsWith
-              ? 0
-              : (containsPhrase ? 1 : 2);
+          final score = startsWith ? 0 : (containsPhrase ? 1 : 2);
           return (school: school, score: score);
         })
         .whereType<({School school, int score})>()
@@ -126,20 +140,39 @@ class SchoolsRepository {
     String? displayName,
     String? photoUrl,
   }) async {
+    final catalogDoc = await _resolveCatalogSchoolDoc(school);
+    final catalog = catalogDoc.data() ?? const <String, dynamic>{};
+    final schoolId = catalogDoc.id;
+    final schoolName = (catalog['nombre'] as String? ?? school.nombre).trim();
+    final schoolLocalidad =
+        (catalog['localidad'] as String? ?? school.localidad).trim();
+    final schoolProvincia =
+        (catalog['provincia'] as String? ?? school.provincia).trim();
+
+    if (schoolName.isEmpty ||
+        schoolLocalidad.isEmpty ||
+        schoolProvincia.isEmpty) {
+      throw StateError('El catálogo del colegio está incompleto.');
+    }
+
     final batch = _firestore.batch();
     batch.set(
       _userRef(uid),
       {
-        'schoolId': school.codigoCentro,
-        'schoolName': school.nombre,
-        'schoolLocalidad': school.localidad,
-        'schoolProvincia': school.provincia,
+        'schoolId': schoolId,
+        'schoolName': schoolName,
+        'schoolLocalidad': schoolLocalidad,
+        'schoolProvincia': schoolProvincia,
+        'displayName':
+            (displayName ?? '').trim().isEmpty ? null : displayName!.trim(),
+        'photoUrl': (photoUrl ?? '').trim().isEmpty ? null : photoUrl!.trim(),
+        'lastActiveAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
     );
     batch.set(
-      _firestore.doc('schools/${school.codigoCentro}/users/$uid'),
+      _firestore.doc('schools/$schoolId/users/$uid'),
       {
         'displayName': (displayName ?? '').trim().isEmpty
             ? 'Familia'
@@ -191,12 +224,12 @@ class SchoolsRepository {
     query = query.orderBy(orderField).orderBy(FieldPath.documentId);
 
     if (prefixField != null) {
-      query = query
-          .startAt([prefixValue]).endAt(['$prefixValue\uf8ff']);
+      query = query.startAt([prefixValue]).endAt(['$prefixValue\uf8ff']);
     }
 
     if (startAfter != null) {
-      final orderValue = (startAfter.data()?[orderField] as String? ?? '').trim();
+      final orderValue =
+          (startAfter.data()?[orderField] as String? ?? '').trim();
       query = query.startAfter([orderValue, startAfter.id]);
     }
 

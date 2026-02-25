@@ -4,18 +4,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/auth_service.dart';
 
-final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
-final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
-final authServiceProvider = Provider<AuthService>((ref) => AuthService(ref.read(firebaseAuthProvider)));
-final authStateProvider = StreamProvider<User?>((ref) => ref.read(authServiceProvider).authStateChanges());
+final firebaseAuthProvider =
+    Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
+final firestoreProvider =
+    Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
+final authServiceProvider =
+    Provider<AuthService>((ref) => AuthService(ref.read(firebaseAuthProvider)));
+final authStateProvider = StreamProvider<User?>(
+    (ref) => ref.read(authServiceProvider).authStateChanges());
 
-Future<String?> _resolveLegacySchoolId(FirebaseFirestore firestore, String uid) async {
+Future<DocumentSnapshot<Map<String, dynamic>>?> _findCatalogSchoolDoc(
+  FirebaseFirestore firestore,
+  String rawSchoolId,
+) async {
+  final trimmed = rawSchoolId.trim();
+  if (trimmed.isEmpty) return null;
+
+  final direct = await firestore.collection('colegios').doc(trimmed).get();
+  if (direct.exists) return direct;
+
+  final byCode = await firestore
+      .collection('colegios')
+      .where('codigoCentro', isEqualTo: trimmed)
+      .limit(1)
+      .get();
+  if (byCode.docs.isNotEmpty) return byCode.docs.first;
+
+  return null;
+}
+
+Future<String?> _resolveLegacySchoolId(
+    FirebaseFirestore firestore, String uid) async {
   final schoolsSnap = await firestore.collection('schools').get();
   if (schoolsSnap.docs.isEmpty) return null;
 
   final checks = await Future.wait(
     schoolsSnap.docs.map((schoolDoc) async {
-      final userDoc = await schoolDoc.reference.collection('users').doc(uid).get();
+      final userDoc =
+          await schoolDoc.reference.collection('users').doc(uid).get();
       if (!userDoc.exists) return (schoolId: null as String?, lastActiveMs: 0);
 
       final ts = userDoc.data()?['lastActiveAt'];
@@ -37,9 +63,42 @@ Future<bool> _ensureSchoolMembership({
   required User user,
   required String schoolId,
 }) async {
-  final membershipRef = firestore.collection('schools').doc(schoolId).collection('users').doc(user.uid);
+  final catalogDoc = await _findCatalogSchoolDoc(firestore, schoolId);
+  if (catalogDoc == null || !catalogDoc.exists) return false;
+
+  final canonicalSchoolId = catalogDoc.id;
+  final catalog = catalogDoc.data() ?? const <String, dynamic>{};
+  final schoolName = (catalog['nombre'] as String? ?? '').trim();
+  final schoolLocalidad = (catalog['localidad'] as String? ?? '').trim();
+  final schoolProvincia = (catalog['provincia'] as String? ?? '').trim();
+  if (schoolName.isEmpty ||
+      schoolLocalidad.isEmpty ||
+      schoolProvincia.isEmpty) {
+    return false;
+  }
+
+  final membershipRef = firestore
+      .collection('schools')
+      .doc(canonicalSchoolId)
+      .collection('users')
+      .doc(user.uid);
   final membershipSnap = await membershipRef.get();
-  if (membershipSnap.exists) return true;
+  if (membershipSnap.exists) {
+    try {
+      await firestore.collection('users').doc(user.uid).set(
+        {
+          'schoolId': canonicalSchoolId,
+          'schoolName': schoolName,
+          'schoolLocalidad': schoolLocalidad,
+          'schoolProvincia': schoolProvincia,
+          'lastActiveAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
+    return true;
+  }
 
   final fallbackName = (user.displayName ?? '').trim().isNotEmpty
       ? user.displayName!.trim()
@@ -47,7 +106,23 @@ Future<bool> _ensureSchoolMembership({
   final photoUrl = (user.photoURL ?? '').trim();
 
   try {
-    await membershipRef.set(
+    final batch = firestore.batch();
+    batch.set(
+      firestore.collection('users').doc(user.uid),
+      {
+        'schoolId': canonicalSchoolId,
+        'schoolName': schoolName,
+        'schoolLocalidad': schoolLocalidad,
+        'schoolProvincia': schoolProvincia,
+        'displayName': fallbackName,
+        'photoUrl': photoUrl.isEmpty ? null : photoUrl,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+    batch.set(
+      membershipRef,
       {
         'displayName': fallbackName,
         'photoUrl': photoUrl.isEmpty ? null : photoUrl,
@@ -60,28 +135,59 @@ Future<bool> _ensureSchoolMembership({
       },
       SetOptions(merge: true),
     );
+    await batch.commit();
     return true;
   } catch (_) {
     return false;
   }
 }
 
-Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, User user) async* {
+Stream<String?> _resolveSchoolIdStream(
+    FirebaseFirestore firestore, User user) async* {
   final uid = user.uid;
   String? lastResolvedSchoolId;
-  await for (final userSnap in firestore.collection('users').doc(uid).snapshots()) {
+  await for (final userSnap
+      in firestore.collection('users').doc(uid).snapshots()) {
     final schoolId = (userSnap.data()?['schoolId'] as String?)?.trim();
     if (schoolId != null && schoolId.isNotEmpty) {
+      final catalogDoc = await _findCatalogSchoolDoc(firestore, schoolId);
+      final canonicalSchoolId = catalogDoc?.id ?? schoolId;
+
       final existingMembership = await firestore
           .collection('schools')
-          .doc(schoolId)
+          .doc(canonicalSchoolId)
           .collection('users')
           .doc(uid)
           .get();
 
       if (existingMembership.exists) {
-        lastResolvedSchoolId = schoolId;
-        yield schoolId;
+        lastResolvedSchoolId = canonicalSchoolId;
+        if (catalogDoc != null && canonicalSchoolId != schoolId) {
+          final catalog = catalogDoc.data() ?? const <String, dynamic>{};
+          final schoolName = (catalog['nombre'] as String? ?? '').trim();
+          final schoolLocalidad =
+              (catalog['localidad'] as String? ?? '').trim();
+          final schoolProvincia =
+              (catalog['provincia'] as String? ?? '').trim();
+          if (schoolName.isNotEmpty &&
+              schoolLocalidad.isNotEmpty &&
+              schoolProvincia.isNotEmpty) {
+            try {
+              await firestore.collection('users').doc(uid).set(
+                {
+                  'schoolId': canonicalSchoolId,
+                  'schoolName': schoolName,
+                  'schoolLocalidad': schoolLocalidad,
+                  'schoolProvincia': schoolProvincia,
+                  'lastActiveAt': FieldValue.serverTimestamp(),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                },
+                SetOptions(merge: true),
+              );
+            } catch (_) {}
+          }
+        }
+        yield canonicalSchoolId;
         continue;
       }
 
@@ -95,11 +201,11 @@ Stream<String?> _resolveSchoolIdStream(FirebaseFirestore firestore, User user) a
       final repairedMembership = await _ensureSchoolMembership(
         firestore: firestore,
         user: user,
-        schoolId: schoolId,
+        schoolId: canonicalSchoolId,
       );
       if (repairedMembership) {
-        lastResolvedSchoolId = schoolId;
-        yield schoolId;
+        lastResolvedSchoolId = canonicalSchoolId;
+        yield canonicalSchoolId;
         continue;
       }
 
@@ -157,18 +263,18 @@ final schoolCatalogProvider =
       .map((snap) => snap.data());
 });
 
-    final schoolCatalogByCodeProvider =
-        StreamProvider.family<Map<String, dynamic>?, String>((ref, schoolId) {
-      final trimmed = schoolId.trim();
-      if (trimmed.isEmpty) return Stream.value(null);
-      return ref
+final schoolCatalogByCodeProvider =
+    StreamProvider.family<Map<String, dynamic>?, String>((ref, schoolId) {
+  final trimmed = schoolId.trim();
+  if (trimmed.isEmpty) return Stream.value(null);
+  return ref
       .read(firestoreProvider)
       .collection('colegios')
       .where('codigoCentro', isEqualTo: trimmed)
       .limit(1)
       .snapshots()
       .map((snap) => snap.docs.isEmpty ? null : snap.docs.first.data());
-    });
+});
 
 enum SessionPhase { unauthenticated, needsInvite, ready }
 
@@ -179,7 +285,8 @@ class SessionState {
     this.schoolId,
   });
 
-  const SessionState.unauthenticated() : this._(phase: SessionPhase.unauthenticated);
+  const SessionState.unauthenticated()
+      : this._(phase: SessionPhase.unauthenticated);
 
   const SessionState.needsInvite(User user)
       : this._(phase: SessionPhase.needsInvite, user: user);
