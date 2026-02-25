@@ -144,7 +144,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(16, scrollTopPadding + 12, 16, 20),
+            padding: EdgeInsets.fromLTRB(16, scrollTopPadding + 4, 16, 20),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
