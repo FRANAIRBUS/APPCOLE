@@ -144,32 +144,38 @@ class AppShell extends ConsumerWidget {
         ),
       ),
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) => navigationShell.goBranch(index),
-        destinations: [
-          NavigationDestination(
-              icon: Icon(Icons.swap_horiz), label: 'Busco'),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unreadEvents > 0,
-              label: Text(unreadEvents > 99 ? '99+' : '$unreadEvents'),
-              child: const Icon(Icons.event),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        maintainBottomViewPadding: true,
+        child: NavigationBar(
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (index) => navigationShell.goBranch(index),
+          destinations: [
+            NavigationDestination(
+                icon: Icon(Icons.swap_horiz), label: 'Busco'),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unreadEvents > 0,
+                label: Text(unreadEvents > 99 ? '99+' : '$unreadEvents'),
+                child: const Icon(Icons.event),
+              ),
+              label: 'Padres',
             ),
-            label: 'Padres',
-          ),
-          NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unreadChats > 0,
-              label: Text(unreadChats > 99 ? '99+' : '$unreadChats'),
-              child: const Icon(Icons.chat_bubble_outline),
+            NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: unreadChats > 0,
+                label: Text(unreadChats > 99 ? '99+' : '$unreadChats'),
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+              label: 'Chat',
             ),
-            label: 'Chat',
-          ),
-          NavigationDestination(
-              icon: Icon(Icons.person_outline), label: 'Perfil'),
-        ],
+            NavigationDestination(
+                icon: Icon(Icons.person_outline), label: 'Perfil'),
+          ],
+        ),
       ),
     );
   }
