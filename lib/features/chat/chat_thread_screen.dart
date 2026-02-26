@@ -162,6 +162,9 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                             final rawText = (data['text'] as String?) ?? '';
                             final text = (status == 'deleted' || rawText.isEmpty) ? 'Mensaje eliminado' : rawText;
                             final createdAt = data['createdAt'] as Timestamp?;
+                            final scheme = Theme.of(context).colorScheme;
+                            final bubbleColor = mine ? scheme.primaryContainer : scheme.surfaceContainerHighest;
+                            final textColor = mine ? scheme.onPrimaryContainer : scheme.onSurface;
 
                             return Align(
                               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -169,6 +172,7 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                                 constraints: const BoxConstraints(maxWidth: 360),
                                 child: Card(
                                   margin: const EdgeInsets.symmetric(vertical: 4),
+                                  color: bubbleColor,
                                   child: Padding(
                                     padding: const EdgeInsets.all(10),
                                     child: Column(
@@ -176,13 +180,19 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
                                       children: [
                                         Align(
                                           alignment: Alignment.centerLeft,
-                                          child: Text(text),
+                                          child: Text(
+                                            text,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(color: textColor),
+                                          ),
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
                                           _hourLabel(createdAt),
                                           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                color: mine ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
                                               ),
                                         ),
                                       ],

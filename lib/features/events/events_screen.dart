@@ -241,6 +241,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                           await showModalBottomSheet<void>(
                             context: context,
                             isScrollControlled: true,
+                            useSafeArea: true,
                             builder: (_) => EventDetailsSheet(
                               schoolId: schoolId,
                               eventId: doc.id,

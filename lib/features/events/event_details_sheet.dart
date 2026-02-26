@@ -21,6 +21,7 @@ class EventDetailsSheet extends StatefulWidget {
 
 class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final _commentCtrl = TextEditingController();
+  final _contentScrollCtrl = ScrollController();
   bool _sending = false;
   int? _syncedCommentsCount;
 
@@ -113,6 +114,7 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   @override
   void dispose() {
     _commentCtrl.dispose();
+    _contentScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -190,9 +192,14 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                     return Column(
                       children: [
                         Expanded(
-                          child: ListView(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            children: [
+                          child: Scrollbar(
+                            controller: _contentScrollCtrl,
+                            thumbVisibility: true,
+                            child: ListView(
+                              controller: _contentScrollCtrl,
+                              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              children: [
                               Card(
                                 child: Padding(
                                   padding: const EdgeInsets.all(14),
@@ -311,7 +318,8 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
                                 },
                               ),
                               const SizedBox(height: 72),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                         if (uid == null)
