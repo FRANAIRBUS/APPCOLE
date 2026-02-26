@@ -243,8 +243,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                             builder: (_) => EventDetailsSheet(
                               schoolId: schoolId,
                               eventId: doc.id,
-                              initialEvent: data,
-                              organizerName: organizerName,
+                              initialCommentsCount: commentsCount,
                             ),
                           );
                         },

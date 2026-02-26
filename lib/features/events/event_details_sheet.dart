@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 class EventDetailsSheet extends StatefulWidget {
@@ -8,14 +8,12 @@ class EventDetailsSheet extends StatefulWidget {
     super.key,
     required this.schoolId,
     required this.eventId,
-    required this.initialEvent,
-    required this.organizerName,
+    required this.initialCommentsCount,
   });
 
   final String schoolId;
   final String eventId;
-  final Map<String, dynamic> initialEvent;
-  final String organizerName;
+  final int initialCommentsCount;
 
   @override
   State<EventDetailsSheet> createState() => _EventDetailsSheetState();
@@ -24,13 +22,7 @@ class EventDetailsSheet extends StatefulWidget {
 class _EventDetailsSheetState extends State<EventDetailsSheet> {
   final _commentCtrl = TextEditingController();
   bool _sending = false;
-  int _lastMarkedCommentsCount = -1;
-
-  @override
-  void dispose() {
-    _commentCtrl.dispose();
-    super.dispose();
-  }
+  int? _syncedCommentsCount;
 
   String _prettyDate(Timestamp? ts) {
     if (ts == null) return 'Sin fecha';
@@ -39,57 +31,62 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _markSeenCommentsCount(int commentsCount) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final now = Timestamp.now();
-    final ref = FirebaseFirestore.instance
-        .doc('schools/${widget.schoolId}/users/$uid/eventReads/${widget.eventId}');
+  DocumentReference<Map<String, dynamic>> _eventRef() {
+    return FirebaseFirestore.instance.doc('schools/${widget.schoolId}/events/${widget.eventId}');
+  }
 
+  DocumentReference<Map<String, dynamic>> _readRef(String uid) {
+    return FirebaseFirestore.instance
+        .doc('schools/${widget.schoolId}/users/$uid/eventReads/${widget.eventId}');
+  }
+
+  Future<void> _markRead({required String uid, required int commentsCount}) async {
     try {
-      await ref.set(
+      await _readRef(uid).set(
         {
-          'lastOpenedAt': now,
+          'lastOpenedAt': FieldValue.serverTimestamp(),
           'lastSeenCommentsCount': commentsCount,
-          'updatedAt': now,
+          'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
     } catch (_) {
-      // Best-effort.
+      // Silencio: si falla por rules o red, no rompemos la vista.
     }
   }
 
-  Future<void> _sendComment() async {
+  Future<void> _sendComment({required String uid}) async {
     final body = _commentCtrl.text.trim();
     if (body.isEmpty) return;
-
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (body.length > 800) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Comentario demasiado largo (máx 800).')));
+      return;
+    }
 
     setState(() => _sending = true);
     try {
       final callable = FirebaseFunctions.instance.httpsCallable('addEventComment');
-      final res = await callable.call<Map<String, dynamic>>({
+      final res = await callable.call({
         'schoolId': widget.schoolId,
         'eventId': widget.eventId,
         'body': body,
       });
-
-      final newCountRaw = res.data['commentsCount'];
-      final newCount = newCountRaw is int
-          ? newCountRaw
-          : int.tryParse('$newCountRaw') ?? 0;
-
       _commentCtrl.clear();
-      await _markSeenCommentsCount(newCount);
 
-      if (!mounted) return;
-      FocusScope.of(context).unfocus();
+      final data = (res.data is Map) ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
+      final newCount = (data['commentsCount'] as num?)?.toInt();
+      if (newCount != null) {
+        _syncedCommentsCount = newCount;
+        await _markRead(uid: uid, commentsCount: newCount);
+      }
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message ?? 'No se pudo enviar el comentario.')));
+      final details = (e.details == null) ? '' : ' (${e.details})';
+      final msg = (e.message ?? 'No se pudo enviar el comentario.').trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('[${e.code}] $msg$details')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -100,244 +97,266 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _syncedCommentsCount = widget.initialCommentsCount;
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      // Al abrir la tarjeta, ya se considera leído.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _markRead(uid: uid, commentsCount: widget.initialCommentsCount);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final eventRef = FirebaseFirestore.instance
-        .doc('schools/${widget.schoolId}/events/${widget.eventId}');
-    final commentsQuery = FirebaseFirestore.instance
-        .collection('schools/${widget.schoolId}/events/${widget.eventId}/comments')
-        .orderBy('createdAt')
-        .limit(200);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    final sheetHeight = MediaQuery.of(context).size.height * 0.85;
+    final commentsQuery = _eventRef()
+        .collection('comments')
+        .orderBy('createdAt', descending: false)
+        // Cost control: cargamos solo lo más reciente. Si quieres paginación, se hace luego.
+        .limit(80)
+        .snapshots();
 
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.only(left: 12, right: 12, bottom: 12 + bottomInset, top: 8),
-        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: eventRef.snapshots(),
-          builder: (context, eventSnap) {
-            final data = eventSnap.data?.data() ?? widget.initialEvent;
-            final title = (data['title'] as String?)?.trim();
-            final description = (data['description'] as String?)?.trim();
-            final place = (data['place'] as String?)?.trim();
-            final category = (data['category'] as String?)?.trim() ?? 'general';
-            final dateTime = data['dateTime'] as Timestamp?;
-
-            final commentsCount = (data['commentsCount'] is int)
-                ? (data['commentsCount'] as int)
-                : int.tryParse('${data['commentsCount'] ?? 0}') ?? 0;
-
-            // Align read state, but avoid spamming writes on rebuild.
-            if (commentsCount != _lastMarkedCommentsCount) {
-              _lastMarkedCommentsCount = commentsCount;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _markSeenCommentsCount(commentsCount);
-              });
-            }
-
-            return SizedBox(
-              height: sheetHeight,
-              child: Material(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                  child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.9,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title?.isNotEmpty == true ? title! : 'Evento',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).maybePop(),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        Chip(label: Text(category)),
-                        Chip(label: Text(place?.isNotEmpty == true ? place! : 'Sin ubicación')),
-                        Chip(label: Text(_prettyDate(dateTime))),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      description?.isNotEmpty == true ? description! : 'Sin descripción',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Publicado por: ${widget.organizerName.isNotEmpty ? widget.organizerName : 'Familia'}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                    const Divider(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Comentarios',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        Text(
-                          commentsCount.toString(),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
                     Expanded(
-                      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: commentsQuery.snapshots(),
-                        builder: (context, commentsSnap) {
-                          if (commentsSnap.hasError) {
-                            return Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Text('No se pudieron cargar los comentarios: ${commentsSnap.error}'),
-                              ),
-                            );
-                          }
-                          if (commentsSnap.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-
-                          final docs = commentsSnap.data?.docs ?? const [];
-                          if (docs.isEmpty) {
-                            return const Align(
-                              alignment: Alignment.topLeft,
-                              child: Text('Sé el primero en comentar.'),
-                            );
-                          }
-
-                          return ListView.separated(
-                            padding: EdgeInsets.zero,
-                            itemCount: docs.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final c = docs[index].data();
-                              final authorName = (c['authorName'] as String?)?.trim();
-                              final authorPhotoUrl = (c['authorPhotoUrl'] as String?)?.trim();
-                              final body = (c['body'] as String?)?.trim();
-                              final createdAt = c['createdAt'] as Timestamp?;
-
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundImage: (authorPhotoUrl != null && authorPhotoUrl.isNotEmpty)
-                                        ? NetworkImage(authorPhotoUrl)
-                                        : null,
-                                    child: (authorPhotoUrl == null || authorPhotoUrl.isEmpty)
-                                        ? const Icon(Icons.person, size: 18)
-                                        : null,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    authorName?.isNotEmpty == true ? authorName! : 'Familia',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.copyWith(fontWeight: FontWeight.w800),
-                                                  ),
-                                                ),
-                                                Text(
-                                                  _prettyDate(createdAt),
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .onSurfaceVariant,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(body?.isNotEmpty == true ? body! : ''),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
+                      child: Text(
+                        'Detalle del evento',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _commentCtrl,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _sending ? null : _sendComment(),
-                            minLines: 1,
-                            maxLines: 3,
-                            decoration: const InputDecoration(
-                              hintText: 'Escribe un comentario…',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton(
-                          onPressed: _sending ? null : _sendComment,
-                          child: Text(_sending ? 'Enviando…' : 'Enviar'),
-                        ),
-                      ],
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Cerrar',
                     ),
                   ],
-                  ),
                 ),
               ),
-            );
-          },
+              Expanded(
+                child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: _eventRef().snapshots(),
+                  builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Center(child: Text('No se pudo cargar el evento: ${snap.error}'));
+                    }
+                    if (!snap.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final doc = snap.data!;
+                    if (!doc.exists) {
+                      return const Center(child: Text('Evento no disponible.'));
+                    }
+
+                    final data = doc.data() ?? {};
+                    final title = (data['title'] as String?)?.trim();
+                    final description = (data['description'] as String?)?.trim();
+                    final place = (data['place'] as String?)?.trim();
+                    final category = (data['category'] as String?)?.trim() ?? 'general';
+                    final dateTime = data['dateTime'] as Timestamp?;
+                    final organizerName = (data['organizerName'] as String?)?.trim();
+                    final commentsCount = (data['commentsCount'] as num?)?.toInt() ?? 0;
+
+                    if (uid != null && (_syncedCommentsCount == null || commentsCount != _syncedCommentsCount)) {
+                      _syncedCommentsCount = commentsCount;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _markRead(uid: uid, commentsCount: commentsCount);
+                      });
+                    }
+
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            children: [
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title?.isNotEmpty == true ? title! : 'Evento',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleLarge
+                                            ?.copyWith(fontWeight: FontWeight.w800),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(description?.isNotEmpty == true ? description! : 'Sin descripción'),
+                                      const SizedBox(height: 10),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          Chip(label: Text(category)),
+                                          Chip(label: Text(place?.isNotEmpty == true ? place! : 'Sin ubicación')),
+                                          Chip(label: Text(_prettyDate(dateTime))),
+                                          Chip(label: Text('Comentarios: $commentsCount')),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Publicado por: ${organizerName?.isNotEmpty == true ? organizerName! : 'Familia'}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Comentarios',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 8),
+                              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                                stream: commentsQuery,
+                                builder: (context, commentsSnap) {
+                                  if (commentsSnap.hasError) {
+                                    return Text('No se pudieron cargar comentarios: ${commentsSnap.error}');
+                                  }
+                                  if (!commentsSnap.hasData) {
+                                    return const Padding(
+                                      padding: EdgeInsets.all(16),
+                                      child: Center(child: CircularProgressIndicator()),
+                                    );
+                                  }
+
+                                  final commentDocs = commentsSnap.data?.docs ?? const [];
+                                  if (commentDocs.isEmpty) {
+                                    return const Card(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(14),
+                                        child: Text('Todavía no hay comentarios.'),
+                                      ),
+                                    );
+                                  }
+
+                                  return Column(
+                                    children: commentDocs.map((c) {
+                                      final cd = c.data();
+                                      final authorName = (cd['authorName'] as String?)?.trim();
+                                      final body = (cd['body'] as String?)?.trim();
+                                      final createdAt = cd['createdAt'] as Timestamp?;
+                                      return Card(
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(12),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      authorName?.isNotEmpty == true ? authorName! : 'Familia',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.copyWith(fontWeight: FontWeight.w700),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    _prettyDate(createdAt),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color: Theme.of(context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(body?.isNotEmpty == true ? body! : ''),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 72),
+                            ],
+                          ),
+                        ),
+                        if (uid == null)
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Inicia sesión para comentar.'),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _commentCtrl,
+                                    minLines: 1,
+                                    maxLines: 4,
+                                    textInputAction: TextInputAction.newline,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Escribe un comentario',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                FilledButton.icon(
+                                  onPressed: _sending ? null : () => _sendComment(uid: uid),
+                                  icon: _sending
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.send),
+                                  label: const Text('Enviar'),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
