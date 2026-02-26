@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -46,26 +48,49 @@ final unreadEventsCountProvider = StreamProvider<int>((ref) {
     return Stream<int>.value(0);
   }
 
-  final userDocStream = FirebaseFirestore.instance
-      .doc('schools/$schoolId/users/$uid')
-      .snapshots();
+  final userRef = FirebaseFirestore.instance.doc('schools/$schoolId/users/$uid');
 
-  return userDocStream.asyncExpand((userSnap) {
-    final data = userSnap.data() ?? const <String, dynamic>{};
-    final lastViewed = data['eventsLastViewedAt'];
-    final lastViewedTs = (lastViewed is Timestamp)
-        ? lastViewed
-        : Timestamp.fromMillisecondsSinceEpoch(0);
+  final controller = StreamController<int>();
+  Timestamp since = Timestamp.fromMillisecondsSinceEpoch(0);
 
-    return FirebaseFirestore.instance
+  StreamSubscription? userSub;
+  StreamSubscription? eventsSub;
+
+  void subscribeEvents() {
+    eventsSub?.cancel();
+    final q = FirebaseFirestore.instance
         .collection('schools/$schoolId/events')
         .where('status', isEqualTo: 'active')
-        .where('createdAt', isGreaterThan: lastViewedTs)
+        .where('createdAt', isGreaterThan: since)
         .orderBy('createdAt', descending: true)
-        .limit(99)
-        .snapshots()
-        .map((snapshot) => snapshot.size);
+        .limit(100);
+
+    eventsSub = q.snapshots().listen(
+      (snapshot) => controller.add(snapshot.size),
+      onError: (_) => controller.add(0),
+    );
+  }
+
+  userSub = userRef.snapshots().listen(
+    (snap) {
+      final data = snap.data();
+      final lastViewed = data?['eventsLastViewedAt'] as Timestamp?;
+      since = lastViewed ?? Timestamp.fromMillisecondsSinceEpoch(0);
+      subscribeEvents();
+    },
+    onError: (_) => controller.add(0),
+  );
+
+  // Initial subscription.
+  subscribeEvents();
+
+  ref.onDispose(() {
+    userSub?.cancel();
+    eventsSub?.cancel();
+    controller.close();
   });
+
+  return controller.stream;
 });
 
 class AppShell extends ConsumerWidget {

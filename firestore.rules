@@ -187,8 +187,8 @@ service cloud.firestore {
         'classIds',
         'extraGroupIds',
         'fcmTokens',
-        'eventsLastViewedAt',
         'lastActiveAt',
+        'eventsLastViewedAt',
         'updatedAt',
       ];
     }
@@ -218,7 +218,8 @@ service cloud.firestore {
     function isSafeSelfUserUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(userSelfWritableKeys())
         && (resource.data.role == null || request.resource.data.role == resource.data.role)
-        && (resource.data.createdAt == null || request.resource.data.createdAt == resource.data.createdAt);
+        && (resource.data.createdAt == null || request.resource.data.createdAt == resource.data.createdAt)
+        && (request.resource.data.eventsLastViewedAt == null || request.resource.data.eventsLastViewedAt is timestamp);
     }
 
     function isChatParticipant(schoolId, chatId) {
@@ -227,7 +228,8 @@ service cloud.firestore {
     }
 
     match /colegios/{codigoCentro} {
-      allow read: if (resource.data.activo == true) || isRoot();
+      allow get: if signedIn() && (resource == null || resource.data.activo == true || isRoot());
+      allow list: if signedIn() && (resource.data.activo == true || isRoot());
       allow create, update: if isRoot() && validColegioPayload(codigoCentro);
       allow delete: if false;
     }
@@ -254,9 +256,9 @@ service cloud.firestore {
         allow update: if (isOwner(uid) && isSafeSelfUserUpdate()) || isStaff(schoolId) || isRoot();
         allow delete: if false;
 
-        // Estados de lectura (unread) por evento (comentarios / apertura).
+        // Per-user read receipts for events (unread comments badges).
         match /eventReads/{eventId} {
-          allow read, create, update, delete: if isOwner(uid) && inSchool(schoolId);
+          allow read, create, update, delete: if inSchool(schoolId) && isOwner(uid);
         }
       }
 
@@ -282,7 +284,7 @@ service cloud.firestore {
         allow update, delete: if inSchool(schoolId)
           && (resource.data.organizerUid == request.auth.uid || isStaff(schoolId) || isRoot());
 
-        // Comentarios tipo hilo (no chat). Escritura solo via Cloud Functions.
+        // Comments are written via Cloud Functions only (avoid client-side abuse).
         match /comments/{commentId} {
           allow read: if inSchool(schoolId) || isRoot();
           allow create, update, delete: if false;

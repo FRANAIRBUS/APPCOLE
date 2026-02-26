@@ -565,77 +565,70 @@ exports.moderationHideTarget = onCall(async (request) => {
   return {ok: true};
 });
 
-// Comentarios dentro de eventos (no chat):
-// schools/{schoolId}/events/{eventId}/comments/{commentId}
-// Actualiza contador y lastComment* en el evento.
 exports.addEventComment = onCall(async (request) => {
   const uid = assertAuth(request);
-
-  const schoolId = String(request.data?.schoolId || '').trim();
+  const providedSchoolId = String(request.data?.schoolId || '').trim();
   const eventId = String(request.data?.eventId || '').trim();
-  const body = String(request.data?.body || '').trim();
+  let body = String(request.data?.body || '').trim();
 
-  if (!schoolId || !eventId || !body) {
-    throw new HttpsError('invalid-argument', 'schoolId, eventId y body son requeridos');
-  }
-  if (body.length > 800) {
-    throw new HttpsError('invalid-argument', 'Comentario demasiado largo (máx 800)');
+  if (!eventId) throw new HttpsError('invalid-argument', 'eventId is required');
+  if (!body) throw new HttpsError('invalid-argument', 'body is required');
+  if (body.length > 1000) body = body.slice(0, 1000);
+
+  const resolvedSchoolId = await resolveSchoolIdForUid(uid);
+  assertSameSchool(providedSchoolId, resolvedSchoolId);
+  const schoolId = providedSchoolId || resolvedSchoolId;
+  if (!schoolId) throw new HttpsError('failed-precondition', 'School not resolved');
+
+  const membershipSnap = await db.doc(`schools/${schoolId}/users/${uid}`).get();
+  if (!membershipSnap.exists) {
+    throw new HttpsError('permission-denied', 'Not a member of this school');
   }
 
-  const globalSnap = await db.doc(`users/${uid}`).get();
-  const global = globalSnap.data() || {};
-  const globalSchoolId = String(global.schoolId || '').trim();
-  if (globalSchoolId && globalSchoolId !== schoolId) {
-    throw new HttpsError('permission-denied', 'School mismatch');
-  }
+  const membership = membershipSnap.data() || {};
+  const tokenName = String(request.auth?.token?.name || '').trim();
+  const tokenEmail = String(request.auth?.token?.email || '').trim();
+  const displayName =
+    String(membership.displayName || '').trim() || tokenName || tokenEmail || 'Familia';
+  const tokenPhotoUrl = String(request.auth?.token?.picture || '').trim();
+  const photoUrl = String(membership.photoUrl || '').trim() || tokenPhotoUrl || null;
 
-  const memberRef = db.doc(`schools/${schoolId}/users/${uid}`);
   const eventRef = db.doc(`schools/${schoolId}/events/${eventId}`);
+  const commentRef = eventRef.collection('comments').doc();
+  const snippet = body.length > 140 ? `${body.slice(0, 140)}…` : body;
 
-  const result = await db.runTransaction(async (tx) => {
-    const [memberSnap, eventSnap] = await Promise.all([tx.get(memberRef), tx.get(eventRef)]);
+  const txResult = await db.runTransaction(async (tx) => {
+    const eventSnap = await tx.get(eventRef);
     if (!eventSnap.exists) throw new HttpsError('not-found', 'Evento no encontrado');
 
     const event = eventSnap.data() || {};
-    if (String(event.status || '').trim() !== 'active') {
-      throw new HttpsError('failed-precondition', 'Evento no activo');
+    if (String(event.status || 'active') !== 'active') {
+      throw new HttpsError('failed-precondition', 'Evento inactivo');
     }
 
-    // Membership: aceptamos si existe doc de user en school, o si el global user declara ese school.
-    if (!memberSnap.exists && globalSchoolId !== schoolId) {
-      throw new HttpsError('permission-denied', 'No membership');
-    }
-
-    const member = memberSnap.data() || {};
-    const authorName =
-      String(member.displayName || global.displayName || request.auth?.token?.name || request.auth?.token?.email || 'Familia').trim() ||
-      'Familia';
-    const authorPhotoUrl = String(member.photoUrl || global.photoUrl || request.auth?.token?.picture || '').trim() || null;
-
-    const now = FieldValue.serverTimestamp();
-    const commentRef = eventRef.collection('comments').doc();
     const prevCount = Number(event.commentsCount || 0);
-    const newCount = Number.isFinite(prevCount) && prevCount >= 0 ? prevCount + 1 : 1;
+    const nextCount = Number.isFinite(prevCount) && prevCount >= 0 ? prevCount + 1 : 1;
+    const now = FieldValue.serverTimestamp();
 
     tx.set(commentRef, {
       authorUid: uid,
-      authorName,
-      authorPhotoUrl,
+      authorName: displayName,
+      authorPhotoUrl: photoUrl,
       body,
-      status: 'active',
       createdAt: now,
+      status: 'active',
     });
 
     tx.update(eventRef, {
-      commentsCount: newCount,
+      commentsCount: nextCount,
       lastCommentAt: now,
       lastCommentByUid: uid,
-      lastCommentSnippet: body.slice(0, 120),
+      lastCommentSnippet: snippet,
       updatedAt: now,
     });
 
-    return {commentsCount: newCount};
+    return {commentsCount: nextCount};
   });
 
-  return {ok: true, ...result};
+  return {ok: true, schoolId, eventId, commentsCount: txResult.commentsCount};
 });
