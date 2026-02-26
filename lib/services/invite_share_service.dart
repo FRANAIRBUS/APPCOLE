@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/text_normalizer.dart';
+
 final inviteShareServiceProvider = Provider<InviteShareService>(
   (ref) => InviteShareService(
     firestore: FirebaseFirestore.instance,
@@ -19,6 +21,51 @@ class InviteShareService {
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+
+  Future<String> _resolveInviteSchoolIdForLink({
+    required String schoolId,
+    required User user,
+  }) async {
+    final raw = schoolId.trim();
+    if (raw.isEmpty) {
+      throw StateError('No hay colegio válido para generar la invitación.');
+    }
+
+    final colegios = _firestore.collection('colegios');
+
+    final direct = await colegios.doc(raw).get();
+    if (direct.exists) return direct.id;
+
+    final byCode = await colegios.where('codigoCentro', isEqualTo: raw).limit(1).get();
+    if (byCode.docs.isNotEmpty) return byCode.docs.first.id;
+
+    final legacySchoolDoc = await _firestore.collection('schools').doc(raw).get();
+    final legacyData = legacySchoolDoc.data() ?? const <String, dynamic>{};
+    final legacyCode = (legacyData['codigoCentro'] as String? ?? '').trim();
+    if (legacyCode.isNotEmpty) {
+      final byLegacyCode = await colegios.doc(legacyCode).get();
+      if (byLegacyCode.exists) return byLegacyCode.id;
+    }
+
+    final globalData =
+        (await _firestore.collection('users').doc(user.uid).get()).data() ?? const <String, dynamic>{};
+    final schoolName = normalizeForSearch((globalData['schoolName'] as String? ?? '').trim());
+    final schoolLocalidad = normalizeForSearch((globalData['schoolLocalidad'] as String? ?? '').trim());
+    final schoolProvincia = normalizeForSearch((globalData['schoolProvincia'] as String? ?? '').trim());
+
+    if (schoolName.isNotEmpty && schoolLocalidad.isNotEmpty && schoolProvincia.isNotEmpty) {
+      final bySnapshot = await colegios
+          .where('activo', isEqualTo: true)
+          .where('nombre_normalizado', isEqualTo: schoolName)
+          .where('localidad_normalizada', isEqualTo: schoolLocalidad)
+          .where('provincia_normalizada', isEqualTo: schoolProvincia)
+          .limit(1)
+          .get();
+      if (bySnapshot.docs.isNotEmpty) return bySnapshot.docs.first.id;
+    }
+
+    return raw;
+  }
 
   Future<String> shareInviteCard({
     required String schoolId,
@@ -41,8 +88,13 @@ class InviteShareService {
         .toSet()
         .toList();
 
+    final inviteSchoolId = await _resolveInviteSchoolIdForLink(
+      schoolId: schoolId,
+      user: user,
+    );
+
     final link = Uri.https('coleconecta.app', '/invite', {
-      'schoolId': schoolId,
+      'schoolId': inviteSchoolId,
       'referrerUid': user.uid,
       'source': source,
     }).toString();

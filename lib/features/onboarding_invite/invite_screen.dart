@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/school.dart';
+import '../../utils/text_normalizer.dart';
 import '../auth/session_provider.dart';
 import '../schools/schools_providers.dart';
 
@@ -25,6 +26,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   Timer? _provinceDebounce;
   Timer? _localityDebounce;
   Timer? _schoolDebounce;
+  StreamSubscription<User?>? _authSub;
 
   List<String> _provinceOptions = const [];
   List<String> _localityOptions = const [];
@@ -41,11 +43,24 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   String? _error;
 
   bool _parsedDeepLink = false;
+  bool _prefillInFlight = false;
   String? _inviteSchoolId;
   String? _inviteReferrerUid;
 
   @override
+  void initState() {
+    super.initState();
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((next) {
+      if (next == null || _selectedSchool != null || _prefillInFlight) return;
+        final inviteToken = (_inviteSchoolId ?? '').trim();
+        if (inviteToken.isEmpty) return;
+        unawaited(_prefillFromInviteToken(inviteToken));
+      });
+  }
+
+  @override
   void dispose() {
+    _authSub?.cancel();
     _provinceDebounce?.cancel();
     _localityDebounce?.cancel();
     _schoolDebounce?.cancel();
@@ -67,27 +82,69 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
 
     // Si el deep-link trae schoolId, precarga y preselecciona el cole.
     final schoolId = _inviteSchoolId;
-    if (schoolId != null && schoolId.isNotEmpty) {
-      _prefillFromSchoolId(schoolId);
+    if (schoolId != null && schoolId.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
+      unawaited(_prefillFromInviteToken(schoolId));
     }
   }
 
-  Future<void> _prefillFromSchoolId(String schoolId) async {
+  Future<School?> _resolveInviteSchoolFromToken(String schoolToken) async {
+    final token = schoolToken.trim();
+    if (token.isEmpty) return null;
+
+    final firestore = FirebaseFirestore.instance;
+    final colegios = firestore.collection('colegios');
+
+    final directDoc = await colegios.doc(token).get();
+    if (directDoc.exists) return School.fromDoc(directDoc);
+
+    final byCode = await colegios.where('codigoCentro', isEqualTo: token).limit(1).get();
+    if (byCode.docs.isNotEmpty) return School.fromDoc(byCode.docs.first);
+
+    if (FirebaseAuth.instance.currentUser == null) return null;
+
+    final legacySchool = await firestore.collection('schools').doc(token).get();
+    final legacyData = legacySchool.data() ?? const <String, dynamic>{};
+
+    final legacyCode = (legacyData['codigoCentro'] as String? ?? '').trim();
+    if (legacyCode.isNotEmpty) {
+      final byLegacyCode = await colegios.doc(legacyCode).get();
+      if (byLegacyCode.exists) return School.fromDoc(byLegacyCode);
+    }
+
+    final legacyName = normalizeForSearch((legacyData['name'] as String? ?? legacyData['nombre'] as String? ?? '').trim());
+    final legacyLocalidad = normalizeForSearch((legacyData['localidad'] as String? ?? '').trim());
+    final legacyProvincia = normalizeForSearch((legacyData['provincia'] as String? ?? '').trim());
+    if (legacyName.isEmpty || legacyLocalidad.isEmpty || legacyProvincia.isEmpty) {
+      return null;
+    }
+
+    final bySnapshot = await colegios
+        .where('activo', isEqualTo: true)
+        .where('nombre_normalizado', isEqualTo: legacyName)
+        .where('localidad_normalizada', isEqualTo: legacyLocalidad)
+        .where('provincia_normalizada', isEqualTo: legacyProvincia)
+        .limit(1)
+        .get();
+    if (bySnapshot.docs.isNotEmpty) return School.fromDoc(bySnapshot.docs.first);
+
+    return null;
+  }
+
+  Future<void> _prefillFromInviteToken(String schoolToken) async {
+    if (_prefillInFlight) return;
+    _prefillInFlight = true;
     setState(() => _error = null);
     try {
-      // No usamos el repositorio aquí: el deep-link debe poder preseleccionar
-      // el colegio incluso si el repositorio cambia. La colección canónica
-      // del catálogo es 'colegios'.
-      final doc = await FirebaseFirestore.instance.collection('colegios').doc(schoolId).get();
-      if (!doc.exists) {
+      final school = await _resolveInviteSchoolFromToken(schoolToken);
+      if (school == null) {
         if (!mounted) return;
-        setState(() => _error = 'La invitación apunta a un colegio que ya no existe.');
+        setState(() => _error = 'La invitación no se pudo vincular automáticamente a un colegio válido.');
         return;
       }
 
-      final school = School.fromDoc(doc);
       if (!mounted) return;
       setState(() {
+        _inviteSchoolId = school.codigoCentro;
         _selectedSchool = school;
         _selectedProvince = school.provincia;
         _selectedLocality = school.localidad;
@@ -101,6 +158,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    } finally {
+      _prefillInFlight = false;
     }
   }
 
@@ -270,6 +329,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       _error = null;
       _schoolNameCtrl.clear();
       _schoolOptions = const [];
+      _inviteSchoolId = null;
     });
   }
 
