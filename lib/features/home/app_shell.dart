@@ -38,6 +38,36 @@ final unreadChatsCountProvider = StreamProvider<int>((ref) {
   });
 });
 
+final unreadEventsCountProvider = StreamProvider<int>((ref) {
+  final schoolId = ref.watch(schoolIdProvider).valueOrNull;
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+
+  if (schoolId == null || uid == null) {
+    return Stream<int>.value(0);
+  }
+
+  final userDocStream = FirebaseFirestore.instance
+      .doc('schools/$schoolId/users/$uid')
+      .snapshots();
+
+  return userDocStream.asyncExpand((userSnap) {
+    final data = userSnap.data() ?? const <String, dynamic>{};
+    final lastViewed = data['eventsLastViewedAt'];
+    final lastViewedTs = (lastViewed is Timestamp)
+        ? lastViewed
+        : Timestamp.fromMillisecondsSinceEpoch(0);
+
+    return FirebaseFirestore.instance
+        .collection('schools/$schoolId/events')
+        .where('status', isEqualTo: 'active')
+        .where('createdAt', isGreaterThan: lastViewedTs)
+        .orderBy('createdAt', descending: true)
+        .limit(99)
+        .snapshots()
+        .map((snapshot) => snapshot.size);
+  });
+});
+
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -63,6 +93,7 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final current = navigationShell.currentIndex.clamp(0, _titles.length - 1);
     final unreadChats = ref.watch(unreadChatsCountProvider).valueOrNull ?? 0;
+    final unreadEvents = ref.watch(unreadEventsCountProvider).valueOrNull ?? 0;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
@@ -94,7 +125,14 @@ class AppShell extends ConsumerWidget {
         destinations: [
           NavigationDestination(
               icon: Icon(Icons.swap_horiz), label: 'Busco'),
-          NavigationDestination(icon: Icon(Icons.event), label: 'Padres'),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: unreadEvents > 0,
+              label: Text(unreadEvents > 99 ? '99+' : '$unreadEvents'),
+              child: const Icon(Icons.event),
+            ),
+            label: 'Padres',
+          ),
           NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
           NavigationDestination(
             icon: Badge(

@@ -187,6 +187,7 @@ service cloud.firestore {
         'classIds',
         'extraGroupIds',
         'fcmTokens',
+        'eventsLastViewedAt',
         'lastActiveAt',
         'updatedAt',
       ];
@@ -226,8 +227,8 @@ service cloud.firestore {
     }
 
     match /colegios/{codigoCentro} {
-      // Catálogo público (solo centros activos). Necesario para invitaciones + onboarding antes de autenticación.
-      allow read: if (resource.data.activo == true) || isRoot();
+      allow get: if signedIn() && (resource == null || resource.data.activo == true || isRoot());
+      allow list: if signedIn() && (resource.data.activo == true || isRoot());
       allow create, update: if isRoot() && validColegioPayload(codigoCentro);
       allow delete: if false;
     }
@@ -253,6 +254,11 @@ service cloud.firestore {
         allow create: if (isOwner(uid) && safeSchoolUserCreate(uid, schoolId)) || isStaff(schoolId) || isRoot();
         allow update: if (isOwner(uid) && isSafeSelfUserUpdate()) || isStaff(schoolId) || isRoot();
         allow delete: if false;
+
+        // Estados de lectura (unread) por evento (comentarios / apertura).
+        match /eventReads/{eventId} {
+          allow read, create, update, delete: if isOwner(uid) && inSchool(schoolId);
+        }
       }
 
       match /posts/{postId} {
@@ -276,6 +282,12 @@ service cloud.firestore {
           && request.resource.data.place is string;
         allow update, delete: if inSchool(schoolId)
           && (resource.data.organizerUid == request.auth.uid || isStaff(schoolId) || isRoot());
+
+        // Comentarios tipo hilo (no chat). Escritura solo via Cloud Functions.
+        match /comments/{commentId} {
+          allow read: if inSchool(schoolId) || isRoot();
+          allow create, update, delete: if false;
+        }
 
         match /attendees/{uid} {
           allow read: if inSchool(schoolId) || isRoot();

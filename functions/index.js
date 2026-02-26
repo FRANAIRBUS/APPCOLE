@@ -564,3 +564,78 @@ exports.moderationHideTarget = onCall(async (request) => {
   await db.doc(targetPath).set({status: 'hidden', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
   return {ok: true};
 });
+
+// Comentarios dentro de eventos (no chat):
+// schools/{schoolId}/events/{eventId}/comments/{commentId}
+// Actualiza contador y lastComment* en el evento.
+exports.addEventComment = onCall(async (request) => {
+  const uid = assertAuth(request);
+
+  const schoolId = String(request.data?.schoolId || '').trim();
+  const eventId = String(request.data?.eventId || '').trim();
+  const body = String(request.data?.body || '').trim();
+
+  if (!schoolId || !eventId || !body) {
+    throw new HttpsError('invalid-argument', 'schoolId, eventId y body son requeridos');
+  }
+  if (body.length > 800) {
+    throw new HttpsError('invalid-argument', 'Comentario demasiado largo (máx 800)');
+  }
+
+  const globalSnap = await db.doc(`users/${uid}`).get();
+  const global = globalSnap.data() || {};
+  const globalSchoolId = String(global.schoolId || '').trim();
+  if (globalSchoolId && globalSchoolId !== schoolId) {
+    throw new HttpsError('permission-denied', 'School mismatch');
+  }
+
+  const memberRef = db.doc(`schools/${schoolId}/users/${uid}`);
+  const eventRef = db.doc(`schools/${schoolId}/events/${eventId}`);
+
+  const result = await db.runTransaction(async (tx) => {
+    const [memberSnap, eventSnap] = await Promise.all([tx.get(memberRef), tx.get(eventRef)]);
+    if (!eventSnap.exists) throw new HttpsError('not-found', 'Evento no encontrado');
+
+    const event = eventSnap.data() || {};
+    if (String(event.status || '').trim() !== 'active') {
+      throw new HttpsError('failed-precondition', 'Evento no activo');
+    }
+
+    // Membership: aceptamos si existe doc de user en school, o si el global user declara ese school.
+    if (!memberSnap.exists && globalSchoolId !== schoolId) {
+      throw new HttpsError('permission-denied', 'No membership');
+    }
+
+    const member = memberSnap.data() || {};
+    const authorName =
+      String(member.displayName || global.displayName || request.auth?.token?.name || request.auth?.token?.email || 'Familia').trim() ||
+      'Familia';
+    const authorPhotoUrl = String(member.photoUrl || global.photoUrl || request.auth?.token?.picture || '').trim() || null;
+
+    const now = FieldValue.serverTimestamp();
+    const commentRef = eventRef.collection('comments').doc();
+    const prevCount = Number(event.commentsCount || 0);
+    const newCount = Number.isFinite(prevCount) && prevCount >= 0 ? prevCount + 1 : 1;
+
+    tx.set(commentRef, {
+      authorUid: uid,
+      authorName,
+      authorPhotoUrl,
+      body,
+      status: 'active',
+      createdAt: now,
+    });
+
+    tx.update(eventRef, {
+      commentsCount: newCount,
+      lastCommentAt: now,
+      lastCommentByUid: uid,
+      lastCommentSnippet: body.slice(0, 120),
+      updatedAt: now,
+    });
+
+    return {commentsCount: newCount};
+  });
+
+  return {ok: true, ...result};
+});

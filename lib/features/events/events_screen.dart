@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/session_provider.dart';
+import 'event_details_sheet.dart';
 
 class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
@@ -14,6 +15,7 @@ class EventsScreen extends ConsumerStatefulWidget {
 
 class _EventsScreenState extends ConsumerState<EventsScreen> {
   bool _creating = false;
+  bool _markedViewed = false;
 
   String _prettyDate(Timestamp? ts) {
     if (ts == null) return 'Sin fecha';
@@ -36,6 +38,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     setState(() => _creating = true);
     try {
       final now = Timestamp.now();
+
+      String? organizerName;
+      try {
+        final me = await FirebaseFirestore.instance.doc('schools/$schoolId/users/$uid').get();
+        organizerName = (me.data()?['displayName'] as String?)?.trim();
+      } catch (_) {}
+
       await FirebaseFirestore.instance.collection('schools/$schoolId/events').add({
         'title': draft.title,
         'description': draft.description,
@@ -43,9 +52,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         'place': draft.place,
         'category': draft.category,
         'organizerUid': uid,
+        if (organizerName != null && organizerName.isNotEmpty) 'organizerName': organizerName,
         'createdAt': now,
+        'updatedAt': now,
         'status': 'active',
         'reportsCount': 0,
+        'commentsCount': 0,
+        'lastCommentAt': null,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Evento creado.')));
@@ -65,6 +78,17 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (!_markedViewed && uid != null) {
+      _markedViewed = true;
+      FirebaseFirestore.instance
+          .doc('schools/$schoolId/users/$uid')
+          .update({'eventsLastViewedAt': FieldValue.serverTimestamp(), 'updatedAt': FieldValue.serverTimestamp()})
+          .catchError((_) {
+        // No romper UX si no tenemos permisos o el doc todavía no existe.
+      });
+    }
+
     final events = FirebaseFirestore.instance
         .collection('schools/$schoolId/events')
         .orderBy('dateTime')
@@ -72,6 +96,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         .snapshots();
     final users =
         FirebaseFirestore.instance.collection('schools/$schoolId/users').snapshots();
+
+    final reads = (uid == null)
+        ? Stream<QuerySnapshot<Map<String, dynamic>>>.empty()
+        : FirebaseFirestore.instance
+            .collection('schools/$schoolId/users/$uid/eventReads')
+            .snapshots();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -102,8 +132,16 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             };
 
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: events,
-              builder: (context, snapshot) {
+              stream: reads,
+              builder: (context, readsSnapshot) {
+                final lastSeenByEvent = <String, int>{
+                  for (final readDoc in readsSnapshot.data?.docs ?? const [])
+                    readDoc.id: (readDoc.data()['lastSeenCommentsCount'] as num?)?.toInt() ?? 0,
+                };
+
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: events,
+                  builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   final message = snapshot.error.toString();
                   return Card(
@@ -148,11 +186,30 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                     final dateTime = data['dateTime'] as Timestamp?;
                     final organizerUid = (data['organizerUid'] as String? ?? '').trim();
                     final organizerName = (userNames[organizerUid] ?? '').trim();
+                    final commentsCount = (data['commentsCount'] as num?)?.toInt() ?? 0;
+                    final lastSeen = lastSeenByEvent[doc.id] ?? 0;
+                    final delta = commentsCount - lastSeen;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       child: ListTile(
+                        onTap: () {
+                          showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (_) => EventDetailsSheet(
+                              schoolId: schoolId,
+                              eventId: doc.id,
+                              initialCommentsCount: commentsCount,
+                            ),
+                          );
+                        },
                         title: Text(title?.isNotEmpty == true ? title! : 'Evento'),
+                        trailing: Badge(
+                          isLabelVisible: delta > 0,
+                          label: Text(delta > 99 ? '99+' : '$delta'),
+                          child: const Icon(Icons.comment_outlined),
+                        ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -166,6 +223,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                                 Chip(label: Text(category)),
                                 Chip(label: Text(place?.isNotEmpty == true ? place! : 'Sin ubicación')),
                                 Chip(label: Text(_prettyDate(dateTime))),
+                                if (commentsCount > 0) Chip(label: Text('Comentarios: $commentsCount')),
                               ],
                             ),
                             const SizedBox(height: 6),
@@ -181,6 +239,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                       ),
                     );
                   }).toList(),
+                );
+                  },
                 );
               },
             );
