@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/school.dart';
+import '../../utils/pending_invite_storage.dart';
 import '../../utils/text_normalizer.dart';
 import '../auth/session_provider.dart';
 import '../schools/schools_providers.dart';
@@ -52,10 +53,10 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     super.initState();
     _authSub = FirebaseAuth.instance.authStateChanges().listen((next) {
       if (next == null || _selectedSchool != null || _prefillInFlight) return;
-      final inviteToken = (_inviteSchoolId ?? '').trim();
-      if (inviteToken.isEmpty) return;
-      unawaited(_prefillFromInviteToken(inviteToken));
-    });
+        final inviteToken = (_inviteSchoolId ?? '').trim();
+        if (inviteToken.isEmpty) return;
+        unawaited(_prefillFromInviteToken(inviteToken));
+      });
   }
 
   @override
@@ -77,16 +78,32 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     _parsedDeepLink = true;
 
     final uri = GoRouterState.of(context).uri;
-    _inviteSchoolId = uri.queryParameters['schoolId']?.trim();
-    _inviteReferrerUid = uri.queryParameters['referrerUid']?.trim();
+    final fromQuerySchoolId = uri.queryParameters['schoolId']?.trim();
+    final fromQueryReferrer = uri.queryParameters['referrerUid']?.trim();
 
-    // Si el deep-link trae schoolId, intenta precargar y preseleccionar el cole.
-    // Si todavía no hay sesión, lo intentamos en modo silencioso (sin mostrar error)
-    // y se reintenta tras login en el listener de authStateChanges.
+    // Caso 1: deep-link normal con query params.
+    if (fromQuerySchoolId != null && fromQuerySchoolId.isNotEmpty) {
+      _inviteSchoolId = fromQuerySchoolId;
+      _inviteReferrerUid = fromQueryReferrer;
+      savePendingInvite(
+        PendingInvite(schoolId: fromQuerySchoolId, referrerUid: fromQueryReferrer),
+      );
+    } else {
+      // Caso 2: Google Sign-In en Safari/iOS (web) hace redirect y puede perder
+      // los query params. Recuperamos desde sessionStorage.
+      final pending = loadPendingInvite();
+      if (pending != null) {
+        _inviteSchoolId = pending.schoolId.trim();
+        _inviteReferrerUid = pending.referrerUid?.trim();
+      }
+    }
+
+    // Si el deep-link trae schoolId, precarga y preselecciona el cole.
     final schoolId = _inviteSchoolId;
     if (schoolId != null && schoolId.isNotEmpty) {
-      final silent = FirebaseAuth.instance.currentUser == null;
-      unawaited(_prefillFromInviteToken(schoolId, silentIfNotSignedIn: silent));
+      // Intenta resolver aunque no haya sesión (colegios es público de lectura).
+      // Si requiere legacy lookup, lo reintentará al autenticarse vía _authSub.
+      unawaited(_prefillFromInviteToken(schoolId));
     }
   }
 
@@ -133,10 +150,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     return null;
   }
 
-  Future<void> _prefillFromInviteToken(
-    String schoolToken, {
-    bool silentIfNotSignedIn = false,
-  }) async {
+  Future<void> _prefillFromInviteToken(String schoolToken) async {
     if (_prefillInFlight) return;
     _prefillInFlight = true;
     setState(() => _error = null);
@@ -144,15 +158,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       final school = await _resolveInviteSchoolFromToken(schoolToken);
       if (school == null) {
         if (!mounted) return;
-
-        // Si no hay sesión, no castigues UX con error: puede ser un token legacy
-        // que solo se resuelve una vez autenticado.
-        if (silentIfNotSignedIn && FirebaseAuth.instance.currentUser == null) {
-          return;
-        }
-
-        setState(() =>
-            _error = 'La invitación no se pudo vincular automáticamente a un colegio válido.');
+        setState(() => _error = 'La invitación no se pudo vincular automáticamente a un colegio válido.');
         return;
       }
 
@@ -169,6 +175,11 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         _localityOptions = const [];
         _schoolOptions = [school];
       });
+
+      // Canonicaliza y persiste por si hay redirect/reload posterior.
+      savePendingInvite(
+        PendingInvite(schoolId: school.codigoCentro, referrerUid: _inviteReferrerUid),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -300,6 +311,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
             displayName: user?.displayName ?? user?.email,
             photoUrl: user?.photoURL,
           );
+
+      // Ya está aplicada, no tiene sentido mantener la invitación viva.
+      clearPendingInvite();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Colegio guardado. Accediendo...')),
@@ -345,6 +359,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       _schoolOptions = const [];
       _inviteSchoolId = null;
     });
+
+    // Si el usuario decide ignorar la invitación, no la resucites tras reload.
+    clearPendingInvite();
   }
 
   @override
