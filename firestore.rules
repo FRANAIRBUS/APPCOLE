@@ -226,8 +226,8 @@ service cloud.firestore {
     }
 
     match /colegios/{codigoCentro} {
-      allow get: if signedIn() && (resource == null || resource.data.activo == true || isRoot());
-      allow list: if signedIn() && (resource.data.activo == true || isRoot());
+      // Catálogo público (solo centros activos). Necesario para invitaciones + onboarding antes de autenticación.
+      allow read: if (resource.data.activo == true) || isRoot();
       allow create, update: if isRoot() && validColegioPayload(codigoCentro);
       allow delete: if false;
     }
