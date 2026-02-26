@@ -35,9 +35,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final isRootAsync = ref.watch(isRootClaimProvider);
 
   return GoRouter(
-    // En web se abre normalmente en '/', y si no existe ruta se muestra pantalla en blanco.
-    // Mantén '/' como landing pública y usa '/splash' solo para loading.
-    initialLocation: '/',
+    // IMPORTANTE: no fijar initialLocation.
+    // Si lo fijamos a '/', rompemos los deep-links (p.ej. /invite?schoolId=...).
     redirect: (context, state) {
       final location = state.matchedLocation;
       final onWelcome = location == '/' || location == '/welcome';

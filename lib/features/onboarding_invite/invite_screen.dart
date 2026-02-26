@@ -52,10 +52,10 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     super.initState();
     _authSub = FirebaseAuth.instance.authStateChanges().listen((next) {
       if (next == null || _selectedSchool != null || _prefillInFlight) return;
-        final inviteToken = (_inviteSchoolId ?? '').trim();
-        if (inviteToken.isEmpty) return;
-        unawaited(_prefillFromInviteToken(inviteToken));
-      });
+      final inviteToken = (_inviteSchoolId ?? '').trim();
+      if (inviteToken.isEmpty) return;
+      unawaited(_prefillFromInviteToken(inviteToken));
+    });
   }
 
   @override
@@ -80,10 +80,13 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     _inviteSchoolId = uri.queryParameters['schoolId']?.trim();
     _inviteReferrerUid = uri.queryParameters['referrerUid']?.trim();
 
-    // Si el deep-link trae schoolId, precarga y preselecciona el cole.
+    // Si el deep-link trae schoolId, intenta precargar y preseleccionar el cole.
+    // Si todavía no hay sesión, lo intentamos en modo silencioso (sin mostrar error)
+    // y se reintenta tras login en el listener de authStateChanges.
     final schoolId = _inviteSchoolId;
-    if (schoolId != null && schoolId.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
-      unawaited(_prefillFromInviteToken(schoolId));
+    if (schoolId != null && schoolId.isNotEmpty) {
+      final silent = FirebaseAuth.instance.currentUser == null;
+      unawaited(_prefillFromInviteToken(schoolId, silentIfNotSignedIn: silent));
     }
   }
 
@@ -130,7 +133,10 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     return null;
   }
 
-  Future<void> _prefillFromInviteToken(String schoolToken) async {
+  Future<void> _prefillFromInviteToken(
+    String schoolToken, {
+    bool silentIfNotSignedIn = false,
+  }) async {
     if (_prefillInFlight) return;
     _prefillInFlight = true;
     setState(() => _error = null);
@@ -138,7 +144,15 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       final school = await _resolveInviteSchoolFromToken(schoolToken);
       if (school == null) {
         if (!mounted) return;
-        setState(() => _error = 'La invitación no se pudo vincular automáticamente a un colegio válido.');
+
+        // Si no hay sesión, no castigues UX con error: puede ser un token legacy
+        // que solo se resuelve una vez autenticado.
+        if (silentIfNotSignedIn && FirebaseAuth.instance.currentUser == null) {
+          return;
+        }
+
+        setState(() =>
+            _error = 'La invitación no se pudo vincular automáticamente a un colegio válido.');
         return;
       }
 
