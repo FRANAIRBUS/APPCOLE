@@ -2,7 +2,7 @@ const {onCall, HttpsError} = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const {initializeApp} = require('firebase-admin/app');
 const {getAuth} = require('firebase-admin/auth');
-const {FieldValue, getFirestore} = require('firebase-admin/firestore');
+const {FieldValue, Timestamp, getFirestore} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
 const {getStorage} = require('firebase-admin/storage');
 
@@ -96,7 +96,7 @@ function assertSafeDocId(value, fieldName) {
 }
 
 
-exports.onboardSelectSchool = onCall(async (request) => {
+exports.onboardSelectSchool = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const providedSchoolId = String(request.data?.schoolId || '').trim();
   if (!providedSchoolId) {
@@ -187,7 +187,7 @@ exports.onboardSelectSchool = onCall(async (request) => {
   return {ok: true, schoolId: providedSchoolId};
 });
 
-exports.redeemInviteCode = onCall(async (request) => {
+exports.redeemInviteCode = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const code = String(request.data?.code || '').trim().toUpperCase();
   const childName = String(request.data?.childName || '').trim();
@@ -303,7 +303,7 @@ exports.redeemInviteCode = onCall(async (request) => {
   return result;
 });
 
-exports.setUserRole = onCall(async (request) => {
+exports.setUserRole = onCall({cors: true}, async (request) => {
   const actorUid = assertAuth(request);
   assertRootClaim(request);
 
@@ -333,7 +333,7 @@ exports.setUserRole = onCall(async (request) => {
   return {ok: true, uid: targetUid, role: requestedRole};
 });
 
-exports.getOrCreateChat = onCall(async (request) => {
+exports.getOrCreateChat = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const peerUid = String(request.data?.peerUid || '').trim();
   const providedSchoolId = String(request.data?.schoolId || '').trim();
@@ -381,7 +381,7 @@ exports.getOrCreateChat = onCall(async (request) => {
   return {ok: true, chatId, schoolId};
 });
 
-exports.sendMessage = onCall(async (request) => {
+exports.sendMessage = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const chatId = String(request.data?.chatId || '').trim();
   const text = String(request.data?.text || '').trim();
@@ -465,7 +465,7 @@ exports.sendMessage = onCall(async (request) => {
   return {ok: true};
 });
 
-exports.markChatRead = onCall(async (request) => {
+exports.markChatRead = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const chatId = String(request.data?.chatId || '').trim();
   const providedSchoolId = String(request.data?.schoolId || '').trim();
@@ -497,7 +497,7 @@ exports.markChatRead = onCall(async (request) => {
   return {ok: true};
 });
 
-exports.deleteMyAccount = onCall(async (request) => {
+exports.deleteMyAccount = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const providedSchoolId = String(request.data?.schoolId || '').trim();
   const schoolId = (await resolveSchoolIdForUid(uid)) || providedSchoolId;
@@ -559,7 +559,7 @@ exports.deleteMyAccount = onCall(async (request) => {
   return {ok: true, schoolId};
 });
 
-exports.moderationHideTarget = onCall(async (request) => {
+exports.moderationHideTarget = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const targetPath = String(request.data?.targetPath || '').trim();
   if (!targetPath.startsWith('schools/')) throw new HttpsError('invalid-argument', 'Invalid targetPath');
@@ -577,50 +577,79 @@ exports.moderationHideTarget = onCall(async (request) => {
 // Comentarios dentro de eventos (no chat):
 // schools/{schoolId}/events/{eventId}/comments/{commentId}
 // Actualiza contador y lastComment* en el evento.
-exports.addEventComment = onCall(async (request) => {
+exports.addEventComment = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
-
-  const schoolId = assertSafeDocId(request.data?.schoolId, 'schoolId');
-  const eventId = assertSafeDocId(request.data?.eventId, 'eventId');
-  const body = String(request.data?.body || '').trim();
-
-  if (!body) throw new HttpsError('invalid-argument', 'body es requerido');
-  if (body.length > 800) {
-    throw new HttpsError('invalid-argument', 'Comentario demasiado largo (máx 800)');
-  }
-
   try {
-    const globalSnap = await db.doc(`users/${uid}`).get();
-    const global = globalSnap.data() || {};
-    const globalSchoolId = String(global.schoolId || '').trim();
-    if (globalSchoolId && globalSchoolId !== schoolId) {
-      throw new HttpsError('permission-denied', 'School mismatch');
+    const providedSchoolId = String(request.data?.schoolId || '').trim();
+    const eventId = assertSafeDocId(request.data?.eventId, 'eventId');
+    const body = String(request.data?.body || '').trim();
+
+    if (!body) throw new HttpsError('invalid-argument', 'body es requerido');
+    if (body.length > 700) {
+      throw new HttpsError('invalid-argument', 'Comentario demasiado largo (máx 700)');
     }
+
+    const resolvedSchoolId = await resolveSchoolIdForUid(uid);
+    const schoolId = assertSafeDocId(providedSchoolId || resolvedSchoolId, 'schoolId');
+    assertSameSchool(providedSchoolId, resolvedSchoolId);
 
     const memberRef = db.doc(`schools/${schoolId}/users/${uid}`);
     const eventRef = db.doc(`schools/${schoolId}/events/${eventId}`);
+    const rateRef = db.doc(`schools/${schoolId}/events/${eventId}/commentRate/${uid}`);
+    const globalRef = db.doc(`users/${uid}`);
+
+    const COOLDOWN_MS = 12 * 1000;
+    const WINDOW_MS = 10 * 60 * 1000;
+    const WINDOW_MAX = 12;
+
+    const nowMs = Date.now();
+    const nowTs = Timestamp.fromMillis(nowMs);
 
     const result = await db.runTransaction(async (tx) => {
-      const [memberSnap, eventSnap] = await Promise.all([tx.get(memberRef), tx.get(eventRef)]);
+      const [memberSnap, eventSnap, rateSnap, globalSnap] = await Promise.all([
+        tx.get(memberRef),
+        tx.get(eventRef),
+        tx.get(rateRef),
+        tx.get(globalRef),
+      ]);
+
       if (!eventSnap.exists) throw new HttpsError('not-found', 'Evento no encontrado');
 
       const event = eventSnap.data() || {};
       const status = String(event.status || '').trim();
-      // Compat: si el evento legacy no tiene status, lo tratamos como activo.
       if (status && status !== 'active') {
         throw new HttpsError('failed-precondition', 'Evento no activo');
       }
 
-      // Membership: aceptamos si existe doc de user en school, o si el global user declara ese school.
+      const global = globalSnap.data() || {};
+      const globalSchoolId = String(global.schoolId || '').trim();
       if (!memberSnap.exists && globalSchoolId !== schoolId) {
         throw new HttpsError('permission-denied', 'No membership');
       }
 
+      const rate = rateSnap.data() || {};
+      const lastAtMs = Number(rate.lastAtMs || 0);
+      if (nowMs - lastAtMs < COOLDOWN_MS) {
+        throw new HttpsError('resource-exhausted', 'Espera unos segundos antes de volver a comentar');
+      }
+
+      let windowStartMs = Number(rate.windowStartMs || 0);
+      let count = Number(rate.count || 0);
+      if (!Number.isFinite(windowStartMs) || windowStartMs <= 0 || nowMs - windowStartMs > WINDOW_MS) {
+        windowStartMs = nowMs;
+        count = 0;
+      }
+      if (count >= WINDOW_MAX) {
+        throw new HttpsError('resource-exhausted', 'Demasiados comentarios en poco tiempo');
+      }
+
       const member = memberSnap.data() || {};
-      const authorName =
-        String(member.displayName || global.displayName || request.auth?.token?.name || request.auth?.token?.email || 'Familia').trim() ||
-        'Familia';
-      const authorPhotoUrl = String(member.photoUrl || global.photoUrl || request.auth?.token?.picture || '').trim() || null;
+      const authorName = String(
+        member.displayName || global.displayName || request.auth?.token?.name || request.auth?.token?.email || 'Familia',
+      ).trim() || 'Familia';
+      const authorPhotoUrl = String(
+        member.photoUrl || global.photoUrl || request.auth?.token?.picture || '',
+      ).trim() || null;
 
       const now = FieldValue.serverTimestamp();
       const commentRef = eventRef.collection('comments').doc();
@@ -636,6 +665,19 @@ exports.addEventComment = onCall(async (request) => {
         createdAt: now,
       });
 
+      tx.set(
+        rateRef,
+        {
+          lastAt: nowTs,
+          lastAtMs: nowMs,
+          windowStartAt: Timestamp.fromMillis(windowStartMs),
+          windowStartMs,
+          count: count + 1,
+          updatedAt: nowTs,
+        },
+        {merge: true},
+      );
+
       tx.update(eventRef, {
         commentsCount: newCount,
         lastCommentAt: now,
@@ -649,12 +691,8 @@ exports.addEventComment = onCall(async (request) => {
 
     return {ok: true, ...result};
   } catch (err) {
-    // Si esto se te estaba viendo como "internal" en el cliente, aquí lo vas a poder diagnosticar.
     logger.error('addEventComment failed', {
       uid,
-      schoolId,
-      eventId,
-      bodyLen: body.length,
       err: String(err?.message || err),
       stack: err?.stack,
     });

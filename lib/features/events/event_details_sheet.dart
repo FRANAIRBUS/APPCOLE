@@ -58,9 +58,9 @@ class _EventDetailsSheetState extends State<EventDetailsSheet> {
   Future<void> _sendComment({required String uid}) async {
     final body = _commentCtrl.text.trim();
     if (body.isEmpty) return;
-    if (body.length > 800) {
+    if (body.length > 700) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Comentario demasiado largo (máx 800).')));
+          .showSnackBar(const SnackBar(content: Text('Comentario demasiado largo (máx 700).')));
       return;
     }
 

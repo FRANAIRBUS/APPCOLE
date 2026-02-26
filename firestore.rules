@@ -258,7 +258,18 @@ service cloud.firestore {
 
         // Per-user read receipts for events (unread comments badges).
         match /eventReads/{eventId} {
-          allow read, create, update, delete: if inSchool(schoolId) && isOwner(uid);
+          allow read: if (inSchool(schoolId) && isOwner(uid)) || isRoot();
+          allow create, update: if inSchool(schoolId)
+            && isOwner(uid)
+            && request.resource.data.keys().hasOnly([
+              'lastOpenedAt',
+              'lastSeenCommentsCount',
+              'updatedAt',
+            ])
+            && request.resource.data.lastSeenCommentsCount is int
+            && request.resource.data.lastOpenedAt is timestamp
+            && request.resource.data.updatedAt is timestamp;
+          allow delete: if inSchool(schoolId) && isOwner(uid);
         }
       }
 
@@ -288,6 +299,11 @@ service cloud.firestore {
         match /comments/{commentId} {
           allow read: if inSchool(schoolId) || isRoot();
           allow create, update, delete: if false;
+        }
+
+        // Anti-spam state (server-only).
+        match /commentRate/{uid} {
+          allow read, write: if false;
         }
 
         match /attendees/{uid} {

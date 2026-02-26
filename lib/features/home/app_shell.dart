@@ -153,7 +153,7 @@ class AppShell extends ConsumerWidget {
           selectedIndex: navigationShell.currentIndex,
           onDestinationSelected: (index) => navigationShell.goBranch(index),
           destinations: [
-            NavigationDestination(
+            const NavigationDestination(
                 icon: Icon(Icons.swap_horiz), label: 'Busco'),
             NavigationDestination(
               icon: Badge(
@@ -163,7 +163,7 @@ class AppShell extends ConsumerWidget {
               ),
               label: 'Padres',
             ),
-            NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
+            const NavigationDestination(icon: Icon(Icons.groups), label: 'Mi Clase'),
             NavigationDestination(
               icon: Badge(
                 isLabelVisible: unreadChats > 0,
@@ -172,7 +172,7 @@ class AppShell extends ConsumerWidget {
               ),
               label: 'Chat',
             ),
-            NavigationDestination(
+            const NavigationDestination(
                 icon: Icon(Icons.person_outline), label: 'Perfil'),
           ],
         ),

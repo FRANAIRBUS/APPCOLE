@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -229,14 +231,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                       child: ListTile(
                         onTap: () async {
                           if (uid != null) {
-                            await _markEventOpened(
+                            unawaited(_markEventOpened(
                               schoolId: schoolId,
                               uid: uid,
                               eventId: doc.id,
                               commentsCount: commentsCount,
-                            );
+                            ));
                           }
-                          if (!mounted) return;
                           await showModalBottomSheet<void>(
                             context: context,
                             isScrollControlled: true,
