@@ -16,6 +16,13 @@ class PostsScreen extends ConsumerStatefulWidget {
 
 class _PostsScreenState extends ConsumerState<PostsScreen> {
   bool _creating = false;
+  static const _quickLinks = [
+    _QuickLinkItem(label: 'Talento', icon: Icons.lightbulb_outline, route: '/talento'),
+    _QuickLinkItem(label: 'BiblioCircular', icon: Icons.menu_book_outlined, route: '/biblio'),
+    _QuickLinkItem(label: 'Veteranos', icon: Icons.groups_2_outlined, route: '/veteranos'),
+    _QuickLinkItem(label: 'Primer Día', icon: Icons.celebration_outlined, route: '/bienvenida'),
+    _QuickLinkItem(label: 'Red de Confianza', icon: Icons.verified_user_outlined, route: '/confianza'),
+  ];
 
   String _relativeDate(Timestamp? timestamp) {
     if (timestamp == null) return 'Ahora';
@@ -91,16 +98,22 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
               Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            FilledButton(onPressed: () => context.push('/talento'), child: const Text('Talento')),
-            FilledButton(onPressed: () => context.push('/biblio'), child: const Text('BiblioCircular')),
-            FilledButton(onPressed: () => context.push('/veteranos'), child: const Text('Veteranos')),
-            FilledButton(onPressed: () => context.push('/bienvenida'), child: const Text('Primer Día')),
-            FilledButton(onPressed: () => context.push('/confianza'), child: const Text('Red de Confianza')),
-          ],
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _quickLinks
+                  .map(
+                    (item) => _QuickAccessTile(
+                      item: item,
+                      onTap: () => context.push(item.route),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -259,6 +272,58 @@ class _PostsScreenState extends ConsumerState<PostsScreen> {
           },
         ),
       ],
+    );
+  }
+}
+
+class _QuickLinkItem {
+  const _QuickLinkItem({required this.label, required this.icon, required this.route});
+
+  final String label;
+  final IconData icon;
+  final String route;
+}
+
+class _QuickAccessTile extends StatelessWidget {
+  const _QuickAccessTile({required this.item, required this.onTap});
+
+  final _QuickLinkItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 148,
+      child: Material(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(item.icon, size: 18, color: scheme.onPrimaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: scheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
