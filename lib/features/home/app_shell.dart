@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
+import '../../widgets/app_logo.dart';
 
 final unreadChatsCountProvider = StreamProvider<int>((ref) {
   final schoolId = ref.watch(schoolIdProvider).valueOrNull;
@@ -98,49 +99,18 @@ class AppShell extends ConsumerWidget {
 
   final StatefulNavigationShell navigationShell;
 
-  static const _titles = [
-    'Busco / Ofrezco',
-    'Entre Padres',
-    'Mi Clase',
-    'Chat',
-    'Perfil',
-  ];
-
-  static const _subtitles = [
-    'Ayuda y recursos entre familias.',
-    'Eventos y coordinación.',
-    'Familias con clases en común.',
-    'Mensajería interna privada.',
-    'Cuenta, privacidad y seguridad.',
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final current = navigationShell.currentIndex.clamp(0, _titles.length - 1);
     final unreadChats = ref.watch(unreadChatsCountProvider).valueOrNull ?? 0;
     final unreadEvents = ref.watch(unreadEventsCountProvider).valueOrNull ?? 0;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: Text(
-          _titles[current],
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(24),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                _subtitles[current],
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
-          ),
+        title: const AppLogo(
+          width: 128,
+          height: 36,
+          borderRadius: 6,
+          fit: BoxFit.contain,
         ),
       ),
       body: navigationShell,
