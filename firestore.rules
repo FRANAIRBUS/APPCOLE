@@ -283,6 +283,18 @@ service cloud.firestore {
           && request.resource.data.body is string;
         allow update, delete: if inSchool(schoolId)
           && (resource.data.authorUid == request.auth.uid || isStaff(schoolId) || isRoot());
+
+        match /votes/{uid} {
+          allow read: if inSchool(schoolId) || isRoot();
+          allow create, update: if inSchool(schoolId)
+            && isOwner(uid)
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.score is int
+            && request.resource.data.score >= 0
+            && request.resource.data.score <= 10
+            && request.resource.data.updatedAt is timestamp;
+          allow delete: if false;
+        }
       }
 
       match /events/{eventId} {
