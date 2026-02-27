@@ -95,6 +95,48 @@ function assertSafeDocId(value, fieldName) {
   return v;
 }
 
+function parseModerationTargetPath(targetPath) {
+  const segments = String(targetPath || '').trim().split('/').filter(Boolean);
+  // Allowed targets:
+  // - schools/{schoolId}/posts/{postId}
+  // - schools/{schoolId}/events/{eventId}
+  // - schools/{schoolId}/events/{eventId}/comments/{commentId}
+  if (segments.length === 4 && segments[0] === 'schools' && segments[2] === 'posts') {
+    return {schoolId: segments[1], kind: 'post'};
+  }
+  if (segments.length === 4 && segments[0] === 'schools' && segments[2] === 'events') {
+    return {schoolId: segments[1], kind: 'event'};
+  }
+  if (
+    segments.length === 6 &&
+    segments[0] === 'schools' &&
+    segments[2] === 'events' &&
+    segments[4] === 'comments'
+  ) {
+    return {schoolId: segments[1], kind: 'event-comment'};
+  }
+  return null;
+}
+
+async function collectUserMessages(chatRef, uid) {
+  const refs = [];
+  let cursor = null;
+
+  while (true) {
+    let query = chatRef.collection('messages').where('senderUid', '==', uid).orderBy('createdAt').limit(500);
+    if (cursor) query = query.startAfter(cursor);
+
+    const snap = await query.get();
+    if (snap.empty) break;
+
+    snap.docs.forEach((doc) => refs.push(doc.ref));
+    cursor = snap.docs[snap.docs.length - 1];
+    if (snap.size < 500) break;
+  }
+
+  return refs;
+}
+
 
 exports.onboardSelectSchool = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
@@ -523,11 +565,11 @@ exports.deleteMyAccount = onCall({cors: true}, async (request) => {
   // Mensajes del usuario: anonimizamos (status=deleted, text='') para que el otro participante no vea contenido.
   for (const chatDoc of chats.docs) {
     const chatRef = chatDoc.ref;
-    const msgSnap = await chatRef.collection('messages').where('senderUid', '==', uid).limit(500).get();
-    msgSnap.docs.forEach((m) =>
+    const messageRefs = await collectUserMessages(chatRef, uid);
+    messageRefs.forEach((m) =>
       ops.push({
         type: 'update',
-        ref: m.ref,
+        ref: m,
         data: {status: 'deleted', text: '', deletedAt: FieldValue.serverTimestamp()},
       }),
     );
@@ -562,15 +604,27 @@ exports.deleteMyAccount = onCall({cors: true}, async (request) => {
 exports.moderationHideTarget = onCall({cors: true}, async (request) => {
   const uid = assertAuth(request);
   const targetPath = String(request.data?.targetPath || '').trim();
-  if (!targetPath.startsWith('schools/')) throw new HttpsError('invalid-argument', 'Invalid targetPath');
+  const targetInfo = parseModerationTargetPath(targetPath);
+  if (!targetInfo) throw new HttpsError('invalid-argument', 'Invalid targetPath');
 
-  const segments = targetPath.split('/');
-  const schoolId = segments[1];
+  const schoolId = targetInfo.schoolId;
   const userSnap = await db.doc(`schools/${schoolId}/users/${uid}`).get();
   const role = userSnap.data()?.role;
   if (!(role === 'moderator' || role === 'admin')) throw new HttpsError('permission-denied', 'Insufficient role');
 
-  await db.doc(targetPath).set({status: 'hidden', updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  const targetRef = db.doc(targetPath);
+  const targetSnap = await targetRef.get();
+  if (!targetSnap.exists) throw new HttpsError('not-found', 'Target not found');
+
+  await targetRef.set(
+    {
+      status: 'hidden',
+      moderatedAt: FieldValue.serverTimestamp(),
+      moderatedByUid: uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    {merge: true},
+  );
   return {ok: true};
 });
 
