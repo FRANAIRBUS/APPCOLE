@@ -749,6 +749,7 @@ class _VoteButtonState extends State<_VoteButton> {
       onPressed: _saving
           ? null
           : () async {
+            final messenger = ScaffoldMessenger.of(context);
               final uid = FirebaseAuth.instance.currentUser?.uid;
               if (uid == null) return;
               final controller = TextEditingController();
@@ -796,10 +797,10 @@ class _VoteButtonState extends State<_VoteButton> {
                   }, SetOptions(merge: true));
                 }
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gracias por tu valoración.')));
+                messenger.showSnackBar(const SnackBar(content: Text('Gracias por tu valoración.')));
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo registrar el voto: $e')));
+                messenger.showSnackBar(SnackBar(content: Text('No se pudo registrar el voto: $e')));
               } finally {
                 if (mounted) setState(() => _saving = false);
               }
@@ -835,9 +836,9 @@ class _SocialLink extends StatelessWidget {
       onPressed: !enabled
           ? null
           : () async {
+              final messenger = ScaffoldMessenger.of(context); // capture before async work
               await Clipboard.setData(ClipboardData(text: normalized));
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(content: Text('Enlace copiado: $normalized')),
               );
             },
