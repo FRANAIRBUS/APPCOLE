@@ -128,8 +128,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final topInset = MediaQuery.of(context).padding.top;
-    final scrollTopPadding = (kPersistentLogoClearance - topInset).clamp(0.0, 220.0);
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -144,7 +142,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(16, scrollTopPadding + 4, 16, 20),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
@@ -157,6 +155,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          const Center(
+                            child: AppLogo(
+                              width: 280,
+                              height: 84,
+                              borderRadius: 10,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             _isRegister ? 'Crear cuenta' : 'Acceder',
                             style: theme.textTheme.headlineSmall,

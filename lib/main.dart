@@ -6,7 +6,6 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'firebase_options.dart';
 import 'router/app_router.dart';
-import 'widgets/app_logo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,17 +111,7 @@ class ColeConectaApp extends ConsumerWidget {
       ),
       builder: (context, child) {
         final bg = Theme.of(context).scaffoldBackgroundColor;
-        return Stack(
-          children: [
-            ColoredBox(color: bg),
-            if (child != null)
-              Padding(
-                padding: const EdgeInsets.only(top: kPersistentLogoClearance),
-                child: child,
-              ),
-            const PersistentLogoOverlay(),
-          ],
-        );
+        return ColoredBox(color: bg, child: child ?? const SizedBox.shrink());
       },
       routerConfig: router,
     );
