@@ -157,9 +157,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           const Center(
                             child: AppLogo(
-                              width: 280,
-                              height: 84,
-                              borderRadius: 10,
+                              width: 420,
+                              height: 120,
+                              borderRadius: 12,
                             ),
                           ),
                           const SizedBox(height: 12),

@@ -105,11 +105,13 @@ class AppShell extends ConsumerWidget {
     final unreadEvents = ref.watch(unreadEventsCountProvider).valueOrNull ?? 0;
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 140,
+        centerTitle: true,
         titleSpacing: 16,
         title: const AppLogo(
-          width: 128,
-          height: 36,
-          borderRadius: 6,
+          width: 420,
+          height: 120,
+          borderRadius: 12,
           fit: BoxFit.contain,
         ),
       ),
