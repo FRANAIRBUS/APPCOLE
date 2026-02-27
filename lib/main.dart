@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:go_router/go_router.dart';
 
 import 'firebase_options.dart';
 import 'router/app_router.dart';
@@ -112,15 +113,36 @@ class ColeConectaApp extends ConsumerWidget {
       ),
       builder: (context, child) {
         final bg = Theme.of(context).scaffoldBackgroundColor;
+        var location = '/';
+        try {
+          location = GoRouterState.of(context).uri.path;
+        } catch (_) {}
+
+        final isShellRoute =
+            location == '/posts' ||
+            location.startsWith('/posts/') ||
+            location == '/events' ||
+            location.startsWith('/events/') ||
+            location == '/matching' ||
+            location.startsWith('/matching/') ||
+            location == '/chat' ||
+            location.startsWith('/chat/') ||
+            location == '/profile' ||
+            location.startsWith('/profile/');
+
+        final showPersistentLogo = !isShellRoute;
         return Stack(
           children: [
             ColoredBox(color: bg),
             if (child != null)
-              Padding(
-                padding: const EdgeInsets.only(top: kPersistentLogoClearance),
-                child: child,
-              ),
-            const PersistentLogoOverlay(),
+              showPersistentLogo
+                  ? Padding(
+                      padding:
+                          const EdgeInsets.only(top: kPersistentLogoClearance),
+                      child: child,
+                    )
+                  : child,
+            if (showPersistentLogo) const PersistentLogoOverlay(),
           ],
         );
       },

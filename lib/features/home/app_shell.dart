@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/session_provider.dart';
+import '../../widgets/app_logo.dart';
 
 final unreadChatsCountProvider = StreamProvider<int>((ref) {
   final schoolId = ref.watch(schoolIdProvider).valueOrNull;
@@ -28,7 +29,8 @@ final unreadChatsCountProvider = StreamProvider<int>((ref) {
       if (lastSender.isEmpty || lastSender == uid) continue;
 
       final lastMessageAt = data['lastMessageAt'];
-      final lastMessageMs = lastMessageAt is Timestamp ? lastMessageAt.millisecondsSinceEpoch : 0;
+      final lastMessageMs =
+          lastMessageAt is Timestamp ? lastMessageAt.millisecondsSinceEpoch : 0;
       if (lastMessageMs <= 0) continue;
 
       final lastReadMap = data['lastReadAt'];
@@ -81,7 +83,6 @@ final unreadEventsCountProvider = StreamProvider<int>((ref) {
     onError: (_) => controller.add(0),
   );
 
-  // Initial subscription.
   subscribeEvents();
 
   ref.onDispose(() {
@@ -114,36 +115,91 @@ class AppShell extends ConsumerWidget {
     'Cuenta, privacidad y seguridad.',
   ];
 
+  static const _expandedHeaderHeight = 252.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = navigationShell.currentIndex.clamp(0, _titles.length - 1);
     final unreadChats = ref.watch(unreadChatsCountProvider).valueOrNull ?? 0;
     final unreadEvents = ref.watch(unreadEventsCountProvider).valueOrNull ?? 0;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final bg = theme.scaffoldBackgroundColor;
+
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Text(
-          _titles[current],
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(24),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                _subtitles[current],
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              pinned: true,
+              expandedHeight: _expandedHeaderHeight,
+              automaticallyImplyLeading: false,
+              backgroundColor: bg,
+              surfaceTintColor: Colors.transparent,
+              scrolledUnderElevation: 0,
+              flexibleSpace: FlexibleSpaceBar(
+                collapseMode: CollapseMode.pin,
+                background: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Column(
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: bg,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: cs.outlineVariant),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(kPersistentLogoCardPadding),
+                            child: AppLogo(
+                              width: 400,
+                              height: kPersistentLogoImageHeight,
+                              borderRadius: 10,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                     ),
+                  ),
+                ),
+              ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _titles[current],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _subtitles[current],
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          ];
+        },
+        body: navigationShell,
       ),
-      body: navigationShell,
       bottomNavigationBar: SafeArea(
         top: false,
         left: false,
@@ -153,8 +209,7 @@ class AppShell extends ConsumerWidget {
           selectedIndex: navigationShell.currentIndex,
           onDestinationSelected: (index) => navigationShell.goBranch(index),
           destinations: [
-            const NavigationDestination(
-                icon: Icon(Icons.swap_horiz), label: 'Busco'),
+            const NavigationDestination(icon: Icon(Icons.swap_horiz), label: 'Busco'),
             NavigationDestination(
               icon: Badge(
                 isLabelVisible: unreadEvents > 0,
@@ -172,8 +227,7 @@ class AppShell extends ConsumerWidget {
               ),
               label: 'Chat',
             ),
-            const NavigationDestination(
-                icon: Icon(Icons.person_outline), label: 'Perfil'),
+            const NavigationDestination(icon: Icon(Icons.person_outline), label: 'Perfil'),
           ],
         ),
       ),
