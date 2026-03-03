@@ -1,3 +1,4 @@
+import 'package:coleconecta/widgets/app_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -49,6 +50,14 @@ class _WelcomeContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Center(
+          child: AppLogo(
+            width: 420,
+            height: 120,
+            borderRadius: 12,
+          ),
+        ),
+        const SizedBox(height: 16),
         Text(
           'Red privada de familias por colegio.',
           style: Theme.of(context)
